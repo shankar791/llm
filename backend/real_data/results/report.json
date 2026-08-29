@@ -1,0 +1,317 @@
+[
+  {
+    "case": "1_single_vqa",
+    "query": "Describe the land-cover and major objects visible in this image.",
+    "scenario": "single_image",
+    "tools": [
+      "T1_VQA",
+      "T2_Caption"
+    ],
+    "confidence": 0.58,
+    "ms": 42,
+    "answer": "Scene analysis of 'opt_0611.png': dominant cover is Arable land (40.4% of scene).\n\nA optical/multispectral capture showing extensive vegetation consistent with scattered vegetation (~16% of frame).",
+    "trace": {
+      "trace_id": "101dcff1",
+      "query": "Describe the land-cover and major objects visible in this image.",
+      "steps": [
+        {
+          "step": 1,
+          "action": "validate_inputs",
+          "detail": {
+            "count": 1,
+            "modalities": [
+              "optical"
+            ],
+            "sizes": [
+              [
+                651,
+                760
+              ]
+            ],
+            "scenario": "single_image"
+          },
+          "duration_ms": 0
+        },
+        {
+          "step": 2,
+          "action": "classify_task",
+          "selected": "vqa",
+          "workflow": [
+            "T1_VQA",
+            "T2_Caption"
+          ],
+          "scores": {
+            "caption": 1,
+            "vqa": 4.5
+          }
+        },
+        {
+          "step": 3,
+          "action": "execute_tools",
+          "tools_run": [
+            "T1_VQA",
+            "T2_Caption"
+          ]
+        },
+        {
+          "step": 4,
+          "action": "compose_answer",
+          "confidence": 0.58,
+          "total_ms": 42
+        }
+      ]
+    }
+  },
+  {
+    "case": "2_grounding_water",
+    "query": "Highlight the water body in this image.",
+    "scenario": "single_image",
+    "tools": [
+      "T3_Ground"
+    ],
+    "confidence": 0.78,
+    "ms": 128,
+    "answer": "Grounded regions matching your query \u2014 water: 6 region(s), 8.2% coverage. Bounding boxes overlaid.",
+    "trace": {
+      "trace_id": "1fe26266",
+      "query": "Highlight the water body in this image.",
+      "steps": [
+        {
+          "step": 1,
+          "action": "validate_inputs",
+          "detail": {
+            "count": 1,
+            "modalities": [
+              "optical"
+            ],
+            "sizes": [
+              [
+                651,
+                760
+              ]
+            ],
+            "scenario": "single_image"
+          },
+          "duration_ms": 0
+        },
+        {
+          "step": 2,
+          "action": "classify_task",
+          "selected": "ground",
+          "workflow": [
+            "T3_Ground"
+          ],
+          "scores": {
+            "ground": 1
+          }
+        },
+        {
+          "step": 3,
+          "action": "execute_tools",
+          "tools_run": [
+            "T3_Ground"
+          ]
+        },
+        {
+          "step": 4,
+          "action": "compose_answer",
+          "confidence": 0.78,
+          "total_ms": 128
+        }
+      ]
+    }
+  },
+  {
+    "case": "3_bitemporal_change",
+    "query": "What changed between these two dates, and where did the change occur?",
+    "scenario": "bi_temporal_pair",
+    "tools": [
+      "T4_Change"
+    ],
+    "confidence": 0.82,
+    "ms": 110,
+    "answer": "Change analysis between 'opt_0611.png' and 'opt_0810.png': 12.0% of the scene changed (severity: localized). 7 distinct changed region(s) highlighted.",
+    "trace": {
+      "trace_id": "a7c40c87",
+      "query": "What changed between these two dates, and where did the change occur?",
+      "steps": [
+        {
+          "step": 1,
+          "action": "validate_inputs",
+          "detail": {
+            "count": 2,
+            "modalities": [
+              "optical",
+              "optical"
+            ],
+            "sizes": [
+              [
+                651,
+                760
+              ],
+              [
+                651,
+                760
+              ]
+            ],
+            "scenario": "bi_temporal_pair"
+          },
+          "duration_ms": 0
+        },
+        {
+          "step": 2,
+          "action": "classify_task",
+          "selected": "change",
+          "workflow": [
+            "T4_Change"
+          ],
+          "scores": {
+            "change": 5
+          }
+        },
+        {
+          "step": 3,
+          "action": "execute_tools",
+          "tools_run": [
+            "T4_Change"
+          ]
+        },
+        {
+          "step": 4,
+          "action": "compose_answer",
+          "confidence": 0.82,
+          "total_ms": 110
+        }
+      ]
+    }
+  },
+  {
+    "case": "4_optical_sar_fusion",
+    "query": "Use the optical and SAR images together to identify built-up and water-covered regions.",
+    "scenario": "cross_modal_pair",
+    "tools": [
+      "T5_OpticalSAR"
+    ],
+    "confidence": 0.75,
+    "ms": 95,
+    "answer": "Optical\u2013SAR joint analysis: water ~14.9% of scene, built-up ~13.5% of scene, vegetation ~44.1% of scene. SAR texture confirmed structural targets where optical was ambiguous (cloud/shadow robust). Class overlays rendered.",
+    "trace": {
+      "trace_id": "6398fdba",
+      "query": "Use the optical and SAR images together to identify built-up and water-covered regions.",
+      "steps": [
+        {
+          "step": 1,
+          "action": "validate_inputs",
+          "detail": {
+            "count": 2,
+            "modalities": [
+              "optical",
+              "sar"
+            ],
+            "sizes": [
+              [
+                651,
+                760
+              ],
+              [
+                638,
+                744
+              ]
+            ],
+            "scenario": "cross_modal_pair"
+          },
+          "duration_ms": 0
+        },
+        {
+          "step": 2,
+          "action": "classify_task",
+          "selected": "fusion",
+          "workflow": [
+            "T5_OpticalSAR"
+          ],
+          "scores": {
+            "fusion": 6
+          }
+        },
+        {
+          "step": 3,
+          "action": "execute_tools",
+          "tools_run": [
+            "T5_OpticalSAR"
+          ]
+        },
+        {
+          "step": 4,
+          "action": "compose_answer",
+          "confidence": 0.75,
+          "total_ms": 95
+        }
+      ]
+    }
+  },
+  {
+    "case": "5_cloud_penetration",
+    "query": "Part of the optical image is covered by clouds. Use the SAR image to describe what lies beneath the clouds.",
+    "scenario": "cross_modal_pair",
+    "tools": [
+      "T5_OpticalSAR"
+    ],
+    "confidence": 0.75,
+    "ms": 87,
+    "answer": "Optical\u2013SAR joint analysis: water ~14.9% of scene, built-up ~13.5% of scene, vegetation ~44.1% of scene. SAR texture confirmed structural targets where optical was ambiguous (cloud/shadow robust). Class overlays rendered.",
+    "trace": {
+      "trace_id": "9b5a74c9",
+      "query": "Part of the optical image is covered by clouds. Use the SAR image to describe what lies beneath the clouds.",
+      "steps": [
+        {
+          "step": 1,
+          "action": "validate_inputs",
+          "detail": {
+            "count": 2,
+            "modalities": [
+              "optical",
+              "sar"
+            ],
+            "sizes": [
+              [
+                651,
+                760
+              ],
+              [
+                638,
+                744
+              ]
+            ],
+            "scenario": "cross_modal_pair"
+          },
+          "duration_ms": 0
+        },
+        {
+          "step": 2,
+          "action": "classify_task",
+          "selected": "fusion",
+          "workflow": [
+            "T5_OpticalSAR"
+          ],
+          "scores": {
+            "caption": 1,
+            "fusion": 4
+          }
+        },
+        {
+          "step": 3,
+          "action": "execute_tools",
+          "tools_run": [
+            "T5_OpticalSAR"
+          ]
+        },
+        {
+          "step": 4,
+          "action": "compose_answer",
+          "confidence": 0.75,
+          "total_ms": 87
+        }
+      ]
+    }
+  }
+]

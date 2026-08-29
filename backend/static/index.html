@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SatQuery AI — ISRO SIH26167</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0b1020; color: #e6e9f2; min-height: 100vh; }
+  header { padding: 20px 32px; border-bottom: 1px solid #1e2745; display:flex; align-items:center; gap:14px;}
+  .logo { width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#4f7cff,#9a4fff);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;}
+  h1 { font-size: 20px; font-weight:600;} .sub{color:#8a93ad;font-size:13px}
+  main { display:flex; gap:24px; padding:24px 32px; max-width:1280px; margin:auto; flex-wrap:wrap;}
+  .panel { background:#121830; border:1px solid #232c52; border-radius:14px; padding:20px; }
+  .left {flex:1; min-width:340px;} .right{flex:1.2; min-width:400px;}
+  label{display:block;font-size:12px;color:#8a93ad;margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em}
+  input[type=file]{margin-bottom:14px;color:#aab} 
+  textarea,input[type=text]{width:100%;background:#0d1329;border:1px solid #2a3563;border-radius:8px;padding:11px 13px;color:#e6e9f2;font-size:14px;resize:vertical}
+  button{margin-top:14px;width:100%;background:linear-gradient(135deg,#4f7cff,#7a4fff);border:none;color:#fff;padding:12px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{filter:brightness(1.15)} button:disabled{opacity:.5;cursor:wait}
+  .examples{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font-size:12px;background:#1b2347;border:1px solid #303c72;color:#aab6dd;padding:5px 10px;border-radius:999px;cursor:pointer}
+  .chip:hover{background:#253063}
+  #answer{white-space:pre-wrap;line-height:1.55;font-size:14px;margin-top:8px}
+  .badge{display:inline-block;font-size:11px;padding:3px 9px;border-radius:6px;margin-right:6px;background:#1b2347;color:#9db1f0}
+  .conf{color:#57d98a;font-weight:600}
+  img.evidence{max-width:100%;border-radius:10px;margin-top:12px;border:1px solid #26305c}
+  details{margin-top:16px;background:#0d1329;border:1px solid #232c52;border-radius:10px;padding:12px 14px}
+  summary{cursor:pointer;color:#8fa2d9;font-size:13px;font-weight:600}
+  pre{font-size:11px;color:#7f8bb3;overflow-x:auto;margin-top:8px;white-space:pre-wrap}
+  .err{color:#ff7b7b}
+</style>
+</head>
+<body>
+<header><div class="logo">S</div><div><h1>SatQuery AI</h1><div class="sub">Agentic vision-language assistant for multimodal remote sensing · ISRO SIH26167</div></div></header>
+<main>
+<section class="panel left">
+  <label>Upload imagery (GeoTIFF / PNG / JPEG — single, bi-temporal pair, or optical+SAR pair)</label>
+  <input type="file" id="files" multiple accept=".tif,.tiff,.png,.jpg,.jpeg">
+  <label>Natural-language query</label>
+  <textarea id="query" rows="3">Describe the land-cover and major objects visible in this image.</textarea>
+  <button id="go">Run Query</button>
+  <div class="examples">
+    <span class="chip">Describe the land-cover and major objects visible in this image.</span>
+    <span class="chip">Highlight the water body referred to in the query.</span>
+    <span class="chip">What changed between these two dates, and where did the change occur?</span>
+    <span class="chip">Use the optical and SAR images together to identify built-up and water-covered regions.</span>
+    <span class="chip">Has the built-up area increased, decreased, or remained unchanged?</span>
+  </div>
+</section>
+<section class="panel right">
+  <label>Result</label>
+  <div id="status"></div>
+  <div id="answer">Upload image(s), pick or type a query, then press Run.</div>
+  <div id="images"></div>
+  <details><summary>Execution trace</summary><pre id="trace"></pre></details>
+</section>
+</main>
+<script>
+const chips = document.querySelectorAll('.chip');
+chips.forEach(c => c.onclick = () => document.getElementById('query').value = c.textContent);
+document.getElementById('go').onclick = async () => {
+  const btn = document.getElementById('go');
+  const filesEl = document.getElementById('files');
+  if (!filesEl.files.length) { alert('Please upload at least one image.'); return; }
+  btn.disabled = true;
+  document.getElementById('status').innerHTML = '<span class="badge">running…</span>';
+  document.getElementById('images').innerHTML = '';
+  const fd = new FormData();
+  fd.append('query', document.getElementById('query').value);
+  for (const f of filesEl.files) fd.append('files', f);
+  try {
+    const res = await fetch('/api/query', {method:'POST', body: fd});
+    const j = await res.json();
+    if (j.error) {
+      document.getElementById('answer').innerHTML = '<span class="err">'+j.error+'</span>';
+      document.getElementById('trace').textContent = JSON.stringify(j.trace||{},null,2);
+    } else {
+      document.getElementById('status').innerHTML =
+        '<span class="badge">'+j.scenario+'</span><span class="conf">confidence '+(j.confidence*100).toFixed(0)+'%</span> '+
+        '<span style="font-size:11px;color:#667">trace '+j.trace.trace_id+' · '+j.trace.steps.at(-1).total_ms+'ms</span>';
+      document.getElementById('answer').textContent = j.answer;
+      document.getElementById('images').innerHTML = j.evidence_images_b64.map(b=>'<img class="evidence" src="'+b+'">').join('');
+      document.getElementById('trace').textContent = JSON.stringify(j.trace,null,2);
+    }
+  } catch(e){ document.getElementById('answer').innerHTML='<span class="err">'+e+'</span>'; }
+  btn.disabled = false;
+};
+</script>
+</body>
+</html>
