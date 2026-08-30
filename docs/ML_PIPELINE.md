@@ -1,4 +1,4 @@
-﻿# Machine Learning Pipeline & Specialist Model Adapters
+# Machine Learning Pipeline & Specialist Model Adapters
 
 This document details the external machine learning models integrated into SatQuery AI, their adapter interfaces, isolation boundaries, and reconnaissance findings.
 
@@ -9,7 +9,16 @@ This document details the external machine learning models integrated into SatQu
 
 ## Model Adapter Directory Layout
 
-```
+ai/
+  ├── llm/                        # Provider-agnostic text LLM foundation
+  ├── vision/                     # Multimodal VisionProvider subsystem
+  │     ├── base.py               # VisionProvider Protocol, GroundingBox, VisionResponse
+  │     ├── openrouter_qwen.py    # OpenRouter provider (Qwen2.5-VL & Qwen3-VL-8B)
+  │     ├── config.py             # VisionConfig & task-level model resolution
+  │     └── mock.py               # MockVisionProvider
+  ├── intent/                     # LLM Intent Classifier
+  └── synthesis/                  # Evidence-Grounded LLM Synthesizer
+
 models/
   ├── geochat/
   │     ├── adapter.py            # GeoChatAdapter (VQA, Captioning, Grounding)
@@ -27,9 +36,9 @@ models/
 tools/
   ├── base.py                     # BaseTool ABC defining run(**kwargs) -> dict
   ├── registry.py                 # ToolRegistry & ToolDefinition allowlist
-  ├── vqa.py                      # VQATool (T1_VQA)
-  ├── captioning.py               # CaptionTool (T2_Caption)
-  ├── grounding.py                # GroundingTool (T3_Ground)
+  ├── vqa.py                      # VQATool (T1_VQA via VisionProvider / GeoChat)
+  ├── captioning.py               # CaptionTool (T2_Caption via VisionProvider / GeoChat)
+  ├── grounding.py                # GroundingTool (T3_Ground via VisionProvider / GeoChat)
   ├── change_detection.py         # ChangeDetectionTool (T4_Change)
   ├── optical_sar.py              # OpticalSARTool (T5_OpticalSAR)
   └── fallback.py                 # FallbackTool (RemoteCLIP)
@@ -109,6 +118,23 @@ tools/
 
 ---
 
+## LLM Intent Classifier Foundation (`ai/intent/`)
+
+The natural-language intent layer uses `LLMIntentClassifier` (`ai/intent/classifier.py`) atop `ai.llm.LLMProvider`.
+
+- **Output Contract**: Emits validated `IntentSchema` constrained to task literals `{'vqa', 'caption', 'ground', 'change', 'fusion'}`.
+- **Tool Selection Isolation**: The LLM is explicitly forbidden from emitting tool IDs (`T1_VQA`..`T5_OpticalSAR`).
+- **Compatibility Gate Boundary**: The deterministic `ToolCompatibilityRouter` reconciles validated intent against actual uploaded raster metadata before invoking specialist adapters.
+- **Fail-Safe Fallback**: Any provider timeout, authentication failure, or malformed JSON triggers an explicit switch to `RuleBasedIntentClassifier` tagged with `classifier_source="rule_fallback"`.
+
+## LLM Synthesis & Evidence Grounding (`ai/synthesis/`)
+
+The response synthesis layer uses `LLMSynthesizer` (`ai/synthesis/llm.py`) atop `ai.llm.LLMProvider`.
+
+- **Structured Evidence Input**: Consumes structured `ToolResult` summaries, `EvidenceItem` geometries/labels, and authoritative GIS metrics (`area_ha`, `polygon_count`, `change_fraction`).
+- **Anti-Hallucination Post-Validation**: `SynthesisValidator` catches fabricated evidence IDs, ungrounded certainty claims, or numeric discrepancies (e.g. area hallucinations).
+- **Deterministic High-Availability Fallback**: If LLM execution fails or is rejected by post-validation, `DeterministicFallbackFormatter` constructs a mathematically accurate, grounded summary directly from GIS and specialist tool data (`synthesis_source="deterministic_fallback"`).
+
 ## Mock-First Testing Paradigm
 
 Every tool in `tools/*.py` must provide a valid deterministic mock implementation that executes without loading GPU/PyTorch weights:
@@ -125,3 +151,4 @@ class MockChangeDetectionTool(BaseTool):
         }
 ```
 This ensures the full LangGraph orchestration graph, API layer, and Leaflet frontend can be developed, tested, and verified end-to-end prior to model checkpoint integration.
+

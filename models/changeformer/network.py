@@ -1,20 +1,50 @@
 ﻿"""
-ChangeFormer (MiT-B0 Siamese Architecture for Bi-Temporal Change Detection).
+ChangeFormer (Official Architecture for Bi-Temporal Change Detection).
 Standalone PyTorch implementation isolated under models/changeformer/.
 Reference: Bandara & Patel, "A Transformer-Based Siamese Network for Change Detection" (IGARSS 2022).
 """
 from __future__ import annotations
 import math
+from typing import List, Tuple, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import List, Tuple
+
+
+class Conv2dNormActivation(nn.Module):
+    """Standard Convolution with optional Norm and Activation."""
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3,
+                 stride: int = 1, padding: int = 1, deconv: bool = False):
+        super().__init__()
+        if deconv:
+            self.conv2d = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=kernel_size,
+                                             stride=stride, padding=padding)
+        else:
+            self.conv2d = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size,
+                                    stride=stride, padding=padding)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.conv2d(x)
+
+
+class DenseBlock(nn.Module):
+    """Residual Dense Block used in progressive upsampling."""
+    def __init__(self, in_channels: int, out_channels: int):
+        super().__init__()
+        self.conv1 = Conv2dNormActivation(in_channels, out_channels, kernel_size=3, padding=1)
+        self.conv2 = Conv2dNormActivation(out_channels, out_channels, kernel_size=3, padding=1)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = x
+        out = self.relu(self.conv1(x))
+        out = self.relu(self.conv2(out))
+        return out + residual
 
 
 class OverlapPatchEmbed(nn.Module):
     """Image to Patch Embedding with overlapping convolutions."""
-    def __init__(self, img_size: int = 256, patch_size: int = 7, stride: int = 4,
-                 in_chans: int = 3, embed_dim: int = 64):
+    def __init__(self, patch_size: int = 7, stride: int = 4, in_chans: int = 3, embed_dim: int = 64):
         super().__init__()
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=patch_size // 2)
@@ -30,8 +60,7 @@ class OverlapPatchEmbed(nn.Module):
 
 class EfficientAttention(nn.Module):
     """Multi-head attention with spatial reduction."""
-    def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = False,
-                 sr_ratio: int = 1):
+    def __init__(self, dim: int, num_heads: int = 8, qkv_bias: bool = True, sr_ratio: int = 1):
         super().__init__()
         self.num_heads = num_heads
         head_dim = dim // num_heads
@@ -65,23 +94,33 @@ class EfficientAttention(nn.Module):
         return self.proj(x)
 
 
+class DWConv(nn.Module):
+    def __init__(self, dim: int = 768):
+        super().__init__()
+        self.dwconv = nn.Conv2d(dim, dim, 3, 1, 1, bias=True, groups=dim)
+
+    def forward(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
+        B, N, C = x.shape
+        x = x.transpose(1, 2).view(B, C, H, W)
+        x = self.dwconv(x)
+        x = x.flatten(2).transpose(1, 2)
+        return x
+
+
 class MixFFN(nn.Module):
     """Mix-FeedForward Network with depthwise 3x3 conv."""
     def __init__(self, in_features: int, hidden_features: int, drop: float = 0.0):
         super().__init__()
         self.fc1 = nn.Linear(in_features, hidden_features)
-        self.dwconv = nn.Conv2d(hidden_features, hidden_features, 3, 1, 1, bias=True, groups=hidden_features)
+        self.dwconv = DWConv(hidden_features)
         self.act = nn.GELU()
         self.fc2 = nn.Linear(hidden_features, in_features)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x: torch.Tensor, H: int, W: int) -> torch.Tensor:
-        B, N, C = x.shape
         x = self.fc1(x)
-        x = x.transpose(1, 2).view(B, -1, H, W)
-        x = self.dwconv(x)
+        x = self.dwconv(x, H, W)
         x = self.act(x)
-        x = x.flatten(2).transpose(1, 2)
         x = self.drop(x)
         x = self.fc2(x)
         return self.drop(x)
@@ -102,16 +141,28 @@ class TransformerBlock(nn.Module):
         return x
 
 
+class MLP(nn.Module):
+    """Linear MLP projection for decoder stages."""
+    def __init__(self, input_dim: int = 2048, embed_dim: int = 768):
+        super().__init__()
+        self.proj = nn.Linear(input_dim, embed_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = x.flatten(2).transpose(1, 2)
+        x = self.proj(x)
+        return x
+
+
 class MiTEncoder(nn.Module):
-    """Mix Transformer (MiT-B0) Encoder backbone."""
-    def __init__(self, in_chans: int = 3, embed_dims: List[int] = [32, 64, 160, 256],
+    """Mix Transformer Encoder backbone."""
+    def __init__(self, in_chans: int = 3, embed_dims: List[int] = [64, 128, 320, 512],
                  num_heads: List[int] = [1, 2, 5, 8], mlp_ratios: List[int] = [4, 4, 4, 4],
-                 depths: List[int] = [2, 2, 2, 2], sr_ratios: List[int] = [8, 4, 2, 1]):
+                 depths: List[int] = [3, 3, 4, 3], sr_ratios: List[int] = [8, 4, 2, 1]):
         super().__init__()
         self.patch_embed1 = OverlapPatchEmbed(7, 4, in_chans=in_chans, embed_dim=embed_dims[0])
-        self.patch_embed2 = OverlapPatchEmbed(3, 2, in_chans=embed_dims[0], embed_dim=embed_dims[1])
-        self.patch_embed3 = OverlapPatchEmbed(3, 2, in_chans=embed_dims[1], embed_dim=embed_dims[2])
-        self.patch_embed4 = OverlapPatchEmbed(3, 2, in_chans=embed_dims[2], embed_dim=embed_dims[3])
+        self.patch_embed2 = OverlapPatchEmbed(7, 2, in_chans=embed_dims[0], embed_dim=embed_dims[1])
+        self.patch_embed3 = OverlapPatchEmbed(7, 2, in_chans=embed_dims[1], embed_dim=embed_dims[2])
+        self.patch_embed4 = OverlapPatchEmbed(7, 2, in_chans=embed_dims[2], embed_dim=embed_dims[3])
 
         self.block1 = nn.ModuleList([TransformerBlock(embed_dims[0], num_heads[0], mlp_ratios[0], sr_ratio=sr_ratios[0]) for _ in range(depths[0])])
         self.norm1 = nn.LayerNorm(embed_dims[0])
@@ -160,66 +211,105 @@ class MiTEncoder(nn.Module):
         return outs
 
 
-class ChangeDecoder(nn.Module):
-    """Multi-Scale Difference Feature Fusion & Change Mask Decoder."""
-    def __init__(self, in_channels: List[int] = [32, 64, 160, 256], embedding_dim: int = 128,
+class ChangeFormerDecoder(nn.Module):
+    """Official ChangeFormer Difference Fusion & Progressive Upsampling Decoder."""
+    def __init__(self, in_channels: List[int] = [64, 128, 320, 512], embedding_dim: int = 256,
                  num_classes: int = 2):
         super().__init__()
-        self.mlp1 = nn.Sequential(nn.Conv2d(in_channels[0], embedding_dim, 1), nn.BatchNorm2d(embedding_dim), nn.ReLU())
-        self.mlp2 = nn.Sequential(nn.Conv2d(in_channels[1], embedding_dim, 1), nn.BatchNorm2d(embedding_dim), nn.ReLU())
-        self.mlp3 = nn.Sequential(nn.Conv2d(in_channels[2], embedding_dim, 1), nn.BatchNorm2d(embedding_dim), nn.ReLU())
-        self.mlp4 = nn.Sequential(nn.Conv2d(in_channels[3], embedding_dim, 1), nn.BatchNorm2d(embedding_dim), nn.ReLU())
+        self.linear_c1 = MLP(input_dim=in_channels[0], embed_dim=embedding_dim)
+        self.linear_c2 = MLP(input_dim=in_channels[1], embed_dim=embedding_dim)
+        self.linear_c3 = MLP(input_dim=in_channels[2], embed_dim=embedding_dim)
+        self.linear_c4 = MLP(input_dim=in_channels[3], embed_dim=embedding_dim)
 
-        self.fuse = nn.Sequential(
-            nn.Conv2d(embedding_dim * 4, embedding_dim, 3, padding=1),
+        self.diff_c1 = nn.Sequential(nn.Conv2d(embedding_dim * 2, embedding_dim, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(embedding_dim), nn.Conv2d(embedding_dim, embedding_dim, 3, padding=1))
+        self.diff_c2 = nn.Sequential(nn.Conv2d(embedding_dim * 2, embedding_dim, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(embedding_dim), nn.Conv2d(embedding_dim, embedding_dim, 3, padding=1))
+        self.diff_c3 = nn.Sequential(nn.Conv2d(embedding_dim * 2, embedding_dim, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(embedding_dim), nn.Conv2d(embedding_dim, embedding_dim, 3, padding=1))
+        self.diff_c4 = nn.Sequential(nn.Conv2d(embedding_dim * 2, embedding_dim, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(embedding_dim), nn.Conv2d(embedding_dim, embedding_dim, 3, padding=1))
+
+        self.linear_fuse = nn.Sequential(
+            nn.Conv2d(embedding_dim * 4, embedding_dim, 1),
             nn.BatchNorm2d(embedding_dim),
-            nn.ReLU(),
-            nn.Dropout2d(0.1),
-            nn.Conv2d(embedding_dim, num_classes, 1)
+            nn.ReLU(inplace=True)
         )
 
+        self.convd2x = Conv2dNormActivation(embedding_dim, embedding_dim, kernel_size=4, stride=2, padding=1, deconv=True)
+        self.dense_2x = nn.Sequential(DenseBlock(embedding_dim, embedding_dim))
+        self.convd1x = Conv2dNormActivation(embedding_dim, embedding_dim, kernel_size=4, stride=2, padding=1, deconv=True)
+        self.dense_1x = nn.Sequential(DenseBlock(embedding_dim, embedding_dim))
+        self.change_probability = Conv2dNormActivation(embedding_dim, num_classes, kernel_size=3, stride=1, padding=1)
+
+        # Multi-scale auxiliary heads
+        self.make_pred_c1 = nn.Sequential(nn.Conv2d(embedding_dim, num_classes, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(num_classes), nn.Conv2d(num_classes, num_classes, 3, padding=1))
+        self.make_pred_c2 = nn.Sequential(nn.Conv2d(embedding_dim, num_classes, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(num_classes), nn.Conv2d(num_classes, num_classes, 3, padding=1))
+        self.make_pred_c3 = nn.Sequential(nn.Conv2d(embedding_dim, num_classes, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(num_classes), nn.Conv2d(num_classes, num_classes, 3, padding=1))
+        self.make_pred_c4 = nn.Sequential(nn.Conv2d(embedding_dim, num_classes, 3, padding=1), nn.ReLU(), nn.BatchNorm2d(num_classes), nn.Conv2d(num_classes, num_classes, 3, padding=1))
+
     def forward(self, feats_t0: List[torch.Tensor], feats_t1: List[torch.Tensor]) -> torch.Tensor:
-        # Multi-scale absolute difference
-        diff1 = torch.abs(feats_t0[0] - feats_t1[0])
-        diff2 = torch.abs(feats_t0[1] - feats_t1[1])
-        diff3 = torch.abs(feats_t0[2] - feats_t1[2])
-        diff4 = torch.abs(feats_t0[3] - feats_t1[3])
+        c1_0, c2_0, c3_0, c4_0 = feats_t0
+        c1_1, c2_1, c3_1, c4_1 = feats_t1
 
-        target_size = diff1.shape[2:]  # H/4, W/4
+        B, _, H1, W1 = c1_0.shape
 
-        p1 = self.mlp1(diff1)
-        p2 = F.interpolate(self.mlp2(diff2), size=target_size, mode="bilinear", align_corners=False)
-        p3 = F.interpolate(self.mlp3(diff3), size=target_size, mode="bilinear", align_corners=False)
-        p4 = F.interpolate(self.mlp4(diff4), size=target_size, mode="bilinear", align_corners=False)
+        # Linear projections
+        _c1_0 = self.linear_c1(c1_0).permute(0, 2, 1).reshape(B, -1, H1, W1)
+        _c2_0 = self.linear_c2(c2_0).permute(0, 2, 1).reshape(B, -1, c2_0.shape[2], c2_0.shape[3])
+        _c3_0 = self.linear_c3(c3_0).permute(0, 2, 1).reshape(B, -1, c3_0.shape[2], c3_0.shape[3])
+        _c4_0 = self.linear_c4(c4_0).permute(0, 2, 1).reshape(B, -1, c4_0.shape[2], c4_0.shape[3])
 
-        fused = torch.cat([p1, p2, p3, p4], dim=1)
-        return self.fuse(fused)
+        _c1_1 = self.linear_c1(c1_1).permute(0, 2, 1).reshape(B, -1, H1, W1)
+        _c2_1 = self.linear_c2(c2_1).permute(0, 2, 1).reshape(B, -1, c2_1.shape[2], c2_1.shape[3])
+        _c3_1 = self.linear_c3(c3_1).permute(0, 2, 1).reshape(B, -1, c3_1.shape[2], c3_1.shape[3])
+        _c4_1 = self.linear_c4(c4_1).permute(0, 2, 1).reshape(B, -1, c4_1.shape[2], c4_1.shape[3])
+
+        # Multi-scale feature difference
+        _c1 = self.diff_c1(torch.cat([_c1_0, _c1_1], dim=1))
+        _c2 = self.diff_c2(torch.cat([_c2_0, _c2_1], dim=1))
+        _c3 = self.diff_c3(torch.cat([_c3_0, _c3_1], dim=1))
+        _c4 = self.diff_c4(torch.cat([_c4_0, _c4_1], dim=1))
+
+        _c2 = F.interpolate(_c2, size=(H1, W1), mode="bilinear", align_corners=False)
+        _c3 = F.interpolate(_c3, size=(H1, W1), mode="bilinear", align_corners=False)
+        _c4 = F.interpolate(_c4, size=(H1, W1), mode="bilinear", align_corners=False)
+
+        # Fuse 4 scales
+        _c = self.linear_fuse(torch.cat([_c1, _c2, _c3, _c4], dim=1))
+
+        # Progressive upsampling (H/4 -> H/2 -> H)
+        x = self.convd2x(_c)
+        x = self.dense_2x(x)
+        x = self.convd1x(x)
+        x = self.dense_1x(x)
+        logits = self.change_probability(x)
+        return logits
 
 
-class ChangeFormerB0(nn.Module):
+class ChangeFormer(nn.Module):
     """
-    Complete Standalone ChangeFormer Network with Siamese MiT-B0 Backbone.
-    Accepts two input images (T0, T1), extracts Siamese multi-scale representations,
-    computes feature differences, and outputs a 2-class change prediction logit map.
+    Official ChangeFormer Siamese Architecture.
+    Matches state_dict naming for official ChangeFormer pretrained checkpoints.
     """
-    def __init__(self, in_chans: int = 3, num_classes: int = 2, embed_dims: List[int] = [32, 64, 160, 256]):
+    def __init__(self, in_chans: int = 3, num_classes: int = 2,
+                 embed_dims: List[int] = [64, 128, 320, 512],
+                 depths: List[int] = [3, 3, 4, 3]):
         super().__init__()
-        self.encoder = MiTEncoder(in_chans=in_chans, embed_dims=embed_dims)
-        self.decoder = ChangeDecoder(in_channels=embed_dims, embedding_dim=128, num_classes=num_classes)
+        self.Tenc_x2 = MiTEncoder(in_chans=in_chans, embed_dims=embed_dims, depths=depths)
+        self.TDec_x2 = ChangeFormerDecoder(in_channels=embed_dims, embedding_dim=256, num_classes=num_classes)
 
     def forward(self, img_t0: torch.Tensor, img_t1: torch.Tensor) -> torch.Tensor:
-        """
-        Forward pass for bi-temporal image pair.
-        Args:
-            img_t0: Tensor of shape (B, 3, H, W)
-            img_t1: Tensor of shape (B, 3, H, W)
-        Returns:
-            Logits tensor of shape (B, 2, H, W)
-        """
-        H, W = img_t0.shape[2:]
-        feats_t0 = self.encoder(img_t0)
-        feats_t1 = self.encoder(img_t1)
-        logits_low = self.decoder(feats_t0, feats_t1)
-        # Upsample directly to full input resolution
-        logits = F.interpolate(logits_low, size=(H, W), mode="bilinear", align_corners=False)
+        feats_t0 = self.Tenc_x2(img_t0)
+        feats_t1 = self.Tenc_x2(img_t1)
+        logits = self.TDec_x2(feats_t0, feats_t1)
         return logits
+
+
+class ChangeFormerModel(nn.Module):
+    """Container wrapping ChangeFormer to match CD_model prefix in official checkpoints."""
+    def __init__(self, in_chans: int = 3, num_classes: int = 2,
+                 embed_dims: List[int] = [64, 128, 320, 512],
+                 depths: List[int] = [3, 3, 4, 3]):
+        super().__init__()
+        self.CD_model = ChangeFormer(in_chans=in_chans, num_classes=num_classes,
+                                     embed_dims=embed_dims, depths=depths)
+
+    def forward(self, img_t0: torch.Tensor, img_t1: torch.Tensor) -> torch.Tensor:
+        return self.CD_model(img_t0, img_t1)

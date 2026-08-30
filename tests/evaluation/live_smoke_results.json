@@ -1,0 +1,34 @@
+{
+  "nlp_intent": {
+    "model": "z-ai/glm-5.2:free",
+    "status": 429,
+    "latency_ms": 889.59,
+    "raw_response": {},
+    "error": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"z-ai/glm-5.2:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"Decart\",\"is_byok\":false,\"provider_error_code\":\"upstream_429\",\"limit_source\":\"upstream_provider_shared_pool\",\"remedy_hint\":\"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing\",\"retry_after_seconds\":5,\"retry_after_seconds_raw\":5,\"headers\":{\"Retry-After\":\"5\"}}},\"user_id\":\"user_3Idq1aMeMb4edSUR11VXVHbj50I\"}"
+  },
+  "nlp_synthesis": {
+    "model": "z-ai/glm-5.2:free",
+    "status": 429,
+    "latency_ms": 689.8,
+    "raw_response": {},
+    "error": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"z-ai/glm-5.2:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"Decart\",\"is_byok\":false,\"provider_error_code\":\"upstream_429\",\"limit_source\":\"upstream_provider_shared_pool\",\"remedy_hint\":\"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing\",\"retry_after_seconds\":5,\"retry_after_seconds_raw\":5,\"headers\":{\"Retry-After\":\"5\"}}},\"user_id\":\"user_3Idq1aMeMb4edSUR11VXVHbj50I\"}"
+  },
+  "vision_vqa": {
+    "model": "google/gemma-4-26b-a4b-it:free",
+    "status": 429,
+    "latency_ms": 1085.64,
+    "error": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"google/gemma-4-26b-a4b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"Google AI Studio\",\"is_byok\":false,\"provider_error_code\":\"429\",\"limit_source\":\"upstream_provider_shared_pool\",\"remedy_hint\":\"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing\"}},\"user_id\":\"user_3Idq1aMeMb4edSUR11VXVHbj50I\"}"
+  },
+  "vision_caption": {
+    "model": "google/gemma-4-26b-a4b-it:free",
+    "status": 429,
+    "latency_ms": 920.21,
+    "error": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"google/gemma-4-26b-a4b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"Google AI Studio\",\"is_byok\":false,\"provider_error_code\":\"429\",\"limit_source\":\"upstream_provider_shared_pool\",\"remedy_hint\":\"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing\"}},\"user_id\":\"user_3Idq1aMeMb4edSUR11VXVHbj50I\"}"
+  },
+  "vision_grounding": {
+    "model": "google/gemma-4-26b-a4b-it:free",
+    "status": 429,
+    "latency_ms": 735.79,
+    "error": "{\"error\":{\"message\":\"Provider returned error\",\"code\":429,\"metadata\":{\"raw\":\"google/gemma-4-26b-a4b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations\",\"provider_name\":\"Google AI Studio\",\"is_byok\":false,\"provider_error_code\":\"429\",\"limit_source\":\"upstream_provider_shared_pool\",\"remedy_hint\":\"Retry shortly, add your own provider key (https://openrouter.ai/settings/integrations), or route to another provider with provider routing: https://openrouter.ai/docs/features/provider-routing\"}},\"user_id\":\"user_3Idq1aMeMb4edSUR11VXVHbj50I\"}"
+  }
+}

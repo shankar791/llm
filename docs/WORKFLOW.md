@@ -1,4 +1,4 @@
-﻿# System Workflow & Execution Pipeline
+# System Workflow & Execution Pipeline
 
 This document details the step-by-step end-to-end execution workflow for SatQuery AI, including decision branching and detailed execution traces.
 
@@ -15,15 +15,22 @@ This document details the step-by-step end-to-end execution workflow for SatQuer
    Extract CRS, Affine transform matrix, geographic bounding box, spatial resolution
    ↓
 4. INTENT UNDERSTANDING (classify_intent_node)
-   Parse query into: task, target, temporal scope, spatial scope, requested modality
+   LLM Intent Classifier (or Rule fallback) parses query into:
+   - task: ('vqa' | 'caption' | 'ground' | 'change' | 'fusion')
+   - target, temporal scope, spatial scope, requires_pair, ambiguity
+   - Strict Pydantic validation on structured JSON
+   - NO tool IDs output by LLM
    ↓
 5. QUERY-DATA COMPATIBILITY CHECK (compatibility_check_node)
-   Evaluate image count, temporal interval, spatial overlap (>80%), resolution compatibility
+   Deterministic verification of actual data against requirements:
+   - Image count (e.g. change requires ≥ 2 images)
+   - Modalities (e.g. fusion requires optical + SAR)
+   - Spatial overlap & CRS compatibility
    ↓
    [Branch: If Incompatible → Generate explanation & exit to synthesis]
    ↓
-6. MASTER AGENT ROUTING (route_tools_node)
-   Determine tool sequence (T1..T5 or Fallback) based on intent + scenario
+6. MASTER AGENT ROUTING (master_router_node)
+   Authoritative assignment of specialist tool IDs (T1..T5) from ToolRegistry
    ↓
 7. SPECIALIST MODEL INFERENCE
    Execute selected tool adapter (GeoChat, ChangeFormer, EarthGPT, or RemoteCLIP)
@@ -43,9 +50,12 @@ This document details the step-by-step end-to-end execution workflow for SatQuer
 12. SCENARIO ANALYSIS
     Evaluate baseline, sustainable, and high-impact trajectories with explicit assumptions
    ↓
-13. NATURAL-LANGUAGE SYNTHESIS (llm_synthesis_node)
-    LLM synthesizes verified EvidenceItems into clear, grounded narrative
-   ↓
+13. EVIDENCE-GROUNDED SYNTHESIS (llm_synthesis_node)
+    - LLMSynthesizer converts ToolResults, EvidenceItems, and GIS metrics into grounded response
+    - Claims mapped to valid evidence IDs (e.g. E1, E2)
+    - Post-validator verifies numeric consistency against GIS measurements
+    - Automatic switch to DeterministicFallbackFormatter if LLM is unavailable or hallucinates
+    ↓
 14. FRONTEND PRESENTATION & VISUALIZATION
     Render GeoJSON layers on Leaflet map, display answer, evidence badges, and execution trace
 ```

@@ -1,16 +1,18 @@
-﻿"""
+"""
 LangGraph node functions for the SatQuery AI Master Agent.
 Implements controlled, deterministic, and auditable orchestration.
 """
-from __future__ import annotations
+import os
 import time
 from typing import Any, Dict, List
+import numpy as np
 from .state import AgentState
-from ai.intent.classifier import RuleBasedIntentClassifier
+from ai.intent.classifier import RuleBasedIntentClassifier, LLMIntentClassifier
+from ai.intent.schema import IntentResult
 from ai.compatibility.router import ToolCompatibilityRouter
 from ai.synthesis.llm import LLMSynthesizer
 from evidence.confidence import ConfidenceAggregator
-from schemas.models import ToolResult, ToolRequest, RasterReference
+from schemas.models import ToolResult, ToolRequest, RasterReference, IntentSchema
 from tools.registry import ToolRegistry
 
 
@@ -82,7 +84,7 @@ def validate_inputs_node(state: AgentState) -> dict:
 
 def classify_intent_node(state: AgentState) -> dict:
     """
-    Node 2: Classify user intent into structured IntentSchema.
+    Node 2: Classify user intent into structured IntentSchema using LLM or rule classifier.
     """
     start_time = time.time()
     if state.get("error"):
@@ -91,8 +93,15 @@ def classify_intent_node(state: AgentState) -> dict:
     query = state.get("query", "")
     n = state.get("n_images", 1)
     modalities = state.get("image_modalities", ["optical"])
+    metadata = state.get("metadata", {}) or {}
 
-    classifier = RuleBasedIntentClassifier()
+    # Support intent_classifier mode selection (LLM default with rule fallback, or explicit rules mode)
+    classifier_mode = metadata.get("intent_classifier") or os.environ.get("INTENT_CLASSIFIER", "llm").lower()
+    if classifier_mode in {"rule", "rules", "rule_based"}:
+        classifier = RuleBasedIntentClassifier()
+    else:
+        classifier = LLMIntentClassifier()
+
     intent_result = classifier.classify(query=query, n_images=n, modalities=modalities)
     intent_schema = intent_result.to_schema()
 
@@ -104,6 +113,10 @@ def classify_intent_node(state: AgentState) -> dict:
         "intent": intent_result.primary_task,
         "target": intent_result.target,
         "workflow": intent_result.workflow,
+        "classifier_source": intent_result.classifier_source,
+        "fallback_used": intent_result.fallback_used,
+        "fallback_reason": intent_result.fallback_reason,
+        "ambiguous": intent_result.ambiguous,
         "duration_ms": duration_ms
     }
     return {
@@ -119,18 +132,23 @@ def classify_intent_node(state: AgentState) -> dict:
 def compatibility_check_node(state: AgentState) -> dict:
     """
     Node 3: Validate whether query requirements are satisfied by available raster data.
-    Runs BEFORE Master Agent tool routing.
+    Runs BEFORE Master Agent tool routing, using the classified IntentResult.
     """
     start_time = time.time()
     if state.get("error"):
         return {}
 
-    classifier = RuleBasedIntentClassifier()
-    intent_result = classifier.classify(
-        query=state.get("query", ""),
-        n_images=state.get("n_images", 1),
-        modalities=state.get("image_modalities", ["optical"])
-    )
+    intent_schema_dict = state.get("intent_schema")
+    if intent_schema_dict:
+        intent_schema = IntentSchema.model_validate(intent_schema_dict)
+        intent_result = IntentResult.from_schema(intent_schema)
+    else:
+        classifier = RuleBasedIntentClassifier()
+        intent_result = classifier.classify(
+            query=state.get("query", ""),
+            n_images=state.get("n_images", 1),
+            modalities=state.get("image_modalities", ["optical"])
+        )
 
     router = ToolCompatibilityRouter()
     compat_res = router.check_compatibility(
@@ -261,7 +279,8 @@ def execute_specialist_tool_node(state: AgentState) -> dict:
         elif selected_tool == "T4_Change":
             img_t0 = images[0] if len(images) > 0 else b""
             img_t1 = images[1] if len(images) > 1 else b""
-            res = tool_instance.run(image_bytes_t0=img_t0, image_bytes_t1=img_t1)
+            mode = state.get("metadata", {}).get("mode", "mock")
+            res = tool_instance.run(image_bytes_t0=img_t0, image_bytes_t1=img_t1, mode=mode)
         elif selected_tool == "T5_OpticalSAR":
             img_opt = images[0] if len(images) > 0 else b""
             img_sar = images[1] if len(images) > 1 else b""
@@ -269,11 +288,13 @@ def execute_specialist_tool_node(state: AgentState) -> dict:
         else:
             raise ValueError(f"No execution handler for tool {selected_tool}")
 
-        # Ensure mock flag is explicit
+        # Ensure metadata integrity
         if "metadata" not in res:
             res["metadata"] = {}
-        res["metadata"]["mock"] = True
-        res["metadata"]["status"] = "success"
+        if "mock" not in res["metadata"]:
+            res["metadata"]["mock"] = res["metadata"].get("is_mock", False)
+        if "status" not in res["metadata"]:
+            res["metadata"]["status"] = "success"
 
         results.append(res)
         status = "success"
@@ -333,68 +354,122 @@ def standardize_results_node(state: AgentState) -> dict:
 
 def gis_processor_node(state: AgentState) -> dict:
     """
-    Node 7: Deterministic geospatial processing assembling canonical GeoJSON.
+    Node 7: Deterministic geospatial processing assembling canonical GeoJSON and EvidenceItems.
     """
+    from gis.processor import GISProcessor
     start_time = time.time()
-    results = state.get("tool_results", [])
-    features = []
+    results = list(state.get("tool_results", []))
+    all_features = []
+    processor = GISProcessor(min_polygon_pixels=5)
 
-    for res in results:
-        for ev in res.get("evidence", []):
-            if ev.get("geojson_feature"):
-                features.append(ev["geojson_feature"])
+    for i, res in enumerate(results):
+        meta = res.get("metadata", {})
+        change_mask = meta.get("change_mask")
+        geo_meta = meta.get("geospatial", {})
+
+        # If a real 2D change mask is present, polygonize it deterministically
+        if isinstance(change_mask, np.ndarray) and change_mask.ndim == 2:
+            transform = geo_meta.get("transform", [0, 1, 0, 0, 0, -1])
+            src_crs = geo_meta.get("crs", "EPSG:4326")
+
+            fc, summary = processor.polygonize_change_mask(
+                change_mask=change_mask,
+                transform=transform,
+                src_crs=src_crs,
+                properties_template={
+                    "model": meta.get("model", "ChangeFormer"),
+                    "confidence_status": res.get("confidence_status", "uncalibrated"),
+                    "acquisition_dates": geo_meta.get("acquisition_dates", {})
+                }
+            )
+
+            # Update evidence with generated polygon features
+            new_evidence = []
+            for feat in fc["features"]:
+                all_features.append(feat)
+                new_evidence.append({
+                    "tool_id": res.get("tool_id", "T4_Change"),
+                    "label": feat["properties"].get("change_type", "change_detected"),
+                    "coverage_pct": round(summary["change_fraction"] * 100, 2),
+                    "bbox_pixels": None,
+                    "geojson_feature": feat
+                })
+
+            # Update tool result with enriched polygon evidence
+            res["evidence"] = new_evidence
+            res["metadata"]["gis_summary"] = summary
+            results[i] = res
+
+        else:
+            # Preserve existing GeoJSON features (e.g. from mocks or grounding boxes)
+            for ev in res.get("evidence", []):
+                if ev.get("geojson_feature"):
+                    all_features.append(ev["geojson_feature"])
 
     geojson = {
         "type": "FeatureCollection",
-        "features": features
-    } if features else None
+        "features": all_features
+    } if all_features else None
 
     duration_ms = int((time.time() - start_time) * 1000)
     trace_entry = {
         "step": 7,
         "node": "gis_processor",
         "status": "success",
-        "features_assembled": len(features),
+        "features_assembled": len(all_features),
         "duration_ms": duration_ms
     }
-    return {"geojson": geojson, "trace": state.get("trace", []) + [trace_entry]}
+    return {
+        "tool_results": results,
+        "geojson": geojson,
+        "trace": state.get("trace", []) + [trace_entry]
+    }
 
 
 def evidence_confidence_node(state: AgentState) -> dict:
     """
     Node 8: Aggregate calibrated confidence scores via ConfidenceAggregator.
+    Gracefully handles uncalibrated specialist tools.
     """
     start_time = time.time()
     results = state.get("tool_results", [])
 
     if not results or state.get("error"):
-        confidence = 0.0
+        confidence = None
     else:
         aggregator = ConfidenceAggregator()
         confidence = aggregator.aggregate(results)
 
     duration_ms = int((time.time() - start_time) * 1000)
+    conf_val = round(confidence, 3) if confidence is not None else None
     trace_entry = {
         "step": 8,
         "node": "evidence_confidence",
         "status": "success",
-        "confidence": round(confidence, 3),
+        "confidence": conf_val,
+        "confidence_status": "calibrated" if conf_val is not None else "uncalibrated",
         "duration_ms": duration_ms
     }
-    return {"confidence": round(confidence, 3), "trace": state.get("trace", []) + [trace_entry]}
+    return {"confidence": conf_val, "trace": state.get("trace", []) + [trace_entry]}
 
 
 def llm_synthesis_node(state: AgentState) -> dict:
     """
-    Node 9: Synthesize final grounded natural-language response.
+    Node 9: Synthesize final evidence-grounded natural-language response.
     """
     start_time = time.time()
     synthesizer = LLMSynthesizer()
-    final_answer = synthesizer.synthesize(
+    intent_dict = state.get("intent_schema") or {}
+    conf_val = state.get("confidence")
+    conf_status = "calibrated" if conf_val is not None else "uncalibrated"
+
+    synthesis_res = synthesizer.synthesize(
         query=state.get("query", ""),
         tool_results=state.get("tool_results", []),
-        confidence=state.get("confidence", 0.0),
+        confidence=conf_val,
+        confidence_status=conf_status,
         geojson=state.get("geojson"),
+        intent=intent_dict,
         error=state.get("error")
     )
 
@@ -402,8 +477,22 @@ def llm_synthesis_node(state: AgentState) -> dict:
     trace_entry = {
         "step": 9,
         "node": "llm_synthesis",
-        "status": "success",
-        "answer_len": len(final_answer),
+        "status": "success" if not synthesis_res.fallback_used else "fallback",
+        "synthesis_source": synthesis_res.synthesis_source,
+        "fallback_used": synthesis_res.fallback_used,
+        "fallback_reason": synthesis_res.fallback_reason,
+        "claims_count": len(synthesis_res.claims),
+        "answer_len": len(synthesis_res.answer),
         "duration_ms": duration_ms
     }
-    return {"final_answer": final_answer, "trace": state.get("trace", []) + [trace_entry]}
+    return {
+        "final_answer": synthesis_res.answer,
+        "synthesis": synthesis_res.model_dump(),
+        "trace": state.get("trace", []) + [trace_entry]
+    }
+
+
+
+
+
+

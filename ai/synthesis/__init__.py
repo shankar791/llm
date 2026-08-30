@@ -1,10 +1,28 @@
 """
-ai.synthesis — LLM-based final answer synthesis for SatQuery AI.
+ai.synthesis — Evidence-grounded natural language synthesis for SatQuery AI.
 
-Produces a single coherent grounded answer from all tool outputs,
-the aggregated confidence score, and optional GeoJSON spatial context.
-
-Modules:
-  llm — LLMSynthesizer (Phase 0: concatenation; Phase 1: LangChain ChatModel)
+Exports:
+  LLMSynthesizer, SynthesisResult, SynthesisClaim, SynthesisPayload, PostValidationResult
+  SynthesisValidator, DeterministicFallbackFormatter
 """
 from __future__ import annotations
+
+from .schema import (
+    SynthesisClaim,
+    SynthesisPayload,
+    PostValidationResult,
+    SynthesisResult,
+)
+from .validator import SynthesisValidator
+from .fallback import DeterministicFallbackFormatter
+from .llm import LLMSynthesizer
+
+__all__ = [
+    "LLMSynthesizer",
+    "SynthesisResult",
+    "SynthesisClaim",
+    "SynthesisPayload",
+    "PostValidationResult",
+    "SynthesisValidator",
+    "DeterministicFallbackFormatter",
+]

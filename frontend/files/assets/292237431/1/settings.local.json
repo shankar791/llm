@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls \"c:\\\\Users\\\\User\\\\AppData\\\\Roaming\\\\Code\\\\User\\\\globalStorage\\\\playcanvas.playcanvas\\\\\")",
+      "Read(//c/Users/User/AppData/Roaming/Code/User/globalStorage/**)"
+    ]
+  }
+}

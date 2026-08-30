@@ -1,47 +1,101 @@
-﻿"""
-CaptioningTool — Structured scene description for satellite imagery.
-Wraps GeoChat captioning head.
+"""
+CaptioningTool — Structured scene description for satellite imagery (T2_Caption).
+Backends: Qwen2.5-VL via OpenRouter (primary) and GeoChatAdapter (optional specialist).
 """
 from __future__ import annotations
-from typing import Any, Dict, Optional
-from .base import BaseTool
+import os
+from typing import Any, Dict, List, Optional, Union, Literal
+import numpy as np
+from PIL import Image
+
+from .base import BaseTool, ToolExecutionError
+from ai.vision.base import VisionProvider
+from ai.vision import get_vision_provider
+from models.geochat.adapter import GeoChatAdapter
 
 
 class CaptioningTool(BaseTool):
-    """Generate structured natural-language descriptions of satellite imagery."""
+    """Generate structured natural-language descriptions of satellite imagery via Qwen2.5-VL / GeoChat."""
     tool_id = "T2_Caption"
-    description = "Scene captioning via GeoChat remote-sensing captioning head"
+    description = "Scene captioning via multimodal vision provider (Qwen2.5-VL / GeoChat)"
 
-    def run(self, image_bytes: Optional[bytes] = None, modality: str = "optical",
-            **kwargs: Any) -> Dict[str, Any]:
+    def __init__(
+        self,
+        mode: Literal["real", "mock"] = "mock",
+        checkpoint_path: Optional[str] = None,
+        vision_provider: Optional[VisionProvider] = None,
+    ):
+        self.mode = mode
+        self.checkpoint_path = checkpoint_path
+        self.vision_provider = vision_provider
+        self._geochat_adapter: Optional[GeoChatAdapter] = None
+
+    def _get_geochat_adapter(self, mode: str) -> GeoChatAdapter:
+        if self._geochat_adapter is None or self._geochat_adapter.mode != mode:
+            self._geochat_adapter = GeoChatAdapter(checkpoint_path=self.checkpoint_path, mode=mode)
+            self._geochat_adapter.load()
+        return self._geochat_adapter
+
+    def run(
+        self,
+        image_bytes: Optional[Union[bytes, List[bytes], np.ndarray, Image.Image]] = None,
+        modality: str = "optical",
+        mode: Optional[Literal["real", "mock"]] = None,
+        **kwargs: Any
+    ) -> Dict[str, Any]:
         """
-        Execute scene captioning.
+        Execute scene captioning over satellite imagery.
 
         Returns:
-            Dict conforming to schemas.models.ToolResult.
+            Dict strictly conforming to schemas.models.ToolResult.
         """
-        answer = "High-resolution satellite capture depicting mixed suburban terrain with planned road networks, agricultural parcels, and scattered commercial clusters."
-        confidence = 0.88
+        active_mode = mode or kwargs.get("mode") or self.mode
 
-        evidence = [
-            {
+        if isinstance(image_bytes, list):
+            img_input = image_bytes[0] if len(image_bytes) > 0 else None
+        else:
+            img_input = image_bytes
+
+        if img_input is None:
+            raise ToolExecutionError("CaptioningTool requires a valid input image.")
+
+        # 1. Mock execution mode
+        if active_mode == "mock":
+            adapter = self._get_geochat_adapter(mode="mock")
+            return adapter.caption(image=img_input, mode="mock")
+
+        # 2. Real execution mode
+        provider_name = os.environ.get("VISION_PROVIDER", "qwen_openrouter").lower()
+
+        if provider_name == "geochat":
+            try:
+                adapter = self._get_geochat_adapter(mode="real")
+                return adapter.caption(image=img_input, mode="real")
+            except Exception as e:
+                raise ToolExecutionError(f"GeoChat caption execution failed: {e}") from e
+
+        # Default to Qwen VisionProvider (OpenRouter)
+        try:
+            provider = self.vision_provider or get_vision_provider()
+            resp = provider.analyze_image_sync(
+                image_input=img_input,
+                prompt="Provide a concise, detailed remote sensing description of this satellite scene.",
+                task="caption",
+                **kwargs,
+            )
+            return {
                 "tool_id": self.tool_id,
-                "label": "Scene context",
-                "coverage_pct": 100.0,
-                "bbox_pixels": None,
-                "geojson_feature": None
+                "answer": resp.text,
+                "confidence": None,
+                "confidence_status": "uncalibrated",
+                "evidence": [],
+                "evidence_image_b64": None,
+                "metadata": {
+                    "provider": resp.provider,
+                    "model": resp.model,
+                    "latency_ms": resp.latency_ms,
+                    "mode": "remote",
+                },
             }
-        ]
-
-        return {
-            "tool_id": self.tool_id,
-            "answer": answer,
-            "confidence": confidence,
-            "evidence": evidence,
-            "evidence_image_b64": None,
-            "metadata": {
-                "mock": True,
-                "modality": modality,
-                "terrain_type": "suburban_mixed"
-            }
-        }
+        except Exception as e:
+            raise ToolExecutionError(f"Qwen caption execution failed: {e}") from e

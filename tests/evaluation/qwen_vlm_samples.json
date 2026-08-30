@@ -1,0 +1,223 @@
+[
+  {
+    "id": "sample-01",
+    "category": "buildings",
+    "task": "vqa",
+    "question": "What is the dominant structural pattern and density of the residential buildings?",
+    "target_feature": "building",
+    "expected_keywords": ["building", "residential", "density"]
+  },
+  {
+    "id": "sample-02",
+    "category": "roads",
+    "task": "vqa",
+    "question": "Are there multi-lane paved highways or primary transport corridors visible crossing through this area?",
+    "target_feature": "road",
+    "expected_keywords": ["highway", "road", "paved", "transport"]
+  },
+  {
+    "id": "sample-03",
+    "category": "water",
+    "task": "vqa",
+    "question": "Is there a river, lake, or artificial water reservoir present in this satellite scene?",
+    "target_feature": "water",
+    "expected_keywords": ["water", "reservoir", "lake", "river"]
+  },
+  {
+    "id": "sample-04",
+    "category": "vegetation",
+    "task": "vqa",
+    "question": "Assess the density and health of the tree canopy and forested parcels.",
+    "target_feature": "vegetation",
+    "expected_keywords": ["vegetation", "canopy", "forest", "tree"]
+  },
+  {
+    "id": "sample-05",
+    "category": "agriculture",
+    "task": "caption",
+    "question": "Provide a comprehensive description of the agricultural field patterns, crop parcels, and irrigation ditches.",
+    "target_feature": "agriculture",
+    "expected_concepts": ["agricultural", "crop", "parcel", "field"]
+  },
+  {
+    "id": "sample-06",
+    "category": "aircraft",
+    "task": "ground",
+    "question": "aircraft",
+    "target_feature": "aircraft",
+    "reference_boxes": [
+      [0.15, 0.20, 0.40, 0.45],
+      [0.50, 0.60, 0.75, 0.85]
+    ]
+  },
+  {
+    "id": "sample-07",
+    "category": "ships",
+    "task": "ground",
+    "question": "cargo ship",
+    "target_feature": "ship",
+    "reference_boxes": [
+      [0.25, 0.10, 0.65, 0.35]
+    ]
+  },
+  {
+    "id": "sample-08",
+    "category": "land_cover",
+    "task": "caption",
+    "question": "Describe the primary land cover distribution across urban, forested, agricultural, and open terrain.",
+    "target_feature": "land_cover",
+    "expected_concepts": ["land cover", "urban", "forest", "terrain"]
+  },
+  {
+    "id": "sample-09",
+    "category": "urban_area",
+    "task": "vqa",
+    "question": "Estimate whether this urban area exhibits high-density commercial development or low-density residential sprawl.",
+    "target_feature": "urban_area",
+    "expected_keywords": ["urban", "development", "density", "residential"]
+  },
+  {
+    "id": "sample-10",
+    "category": "object_localization",
+    "task": "ground",
+    "question": "circular storage tank",
+    "target_feature": "storage_tank",
+    "reference_boxes": [
+      [0.10, 0.15, 0.30, 0.35],
+      [0.40, 0.15, 0.60, 0.35],
+      [0.70, 0.15, 0.90, 0.35]
+    ]
+  },
+  {
+    "id": "sample-11",
+    "category": "ports",
+    "task": "caption",
+    "question": "Describe this maritime port facility including container terminals, loading docks, and adjacent shipping channels.",
+    "target_feature": "port",
+    "expected_concepts": ["port", "terminal", "dock", "vessel", "coastal"]
+  },
+  {
+    "id": "sample-12",
+    "category": "industrial_infrastructure",
+    "task": "vqa",
+    "question": "What key industrial structures such as processing units, warehouses, or cooling towers are present?",
+    "target_feature": "industrial",
+    "expected_keywords": ["industrial", "warehouse", "facility", "plant"]
+  },
+  {
+    "id": "sample-13",
+    "category": "urban_expansion",
+    "task": "vqa",
+    "question": "Are there active construction footprints or cleared land parcels indicating peri-urban expansion?",
+    "target_feature": "construction",
+    "expected_keywords": ["construction", "cleared", "expansion", "parcel"]
+  },
+  {
+    "id": "sample-14",
+    "category": "buildings",
+    "task": "ground",
+    "question": "large commercial warehouse",
+    "target_feature": "building",
+    "reference_boxes": [
+      [0.20, 0.30, 0.50, 0.70]
+    ]
+  },
+  {
+    "id": "sample-15",
+    "category": "roads",
+    "task": "ground",
+    "question": "bridge over water",
+    "target_feature": "bridge",
+    "reference_boxes": [
+      [0.45, 0.10, 0.55, 0.90]
+    ]
+  },
+  {
+    "id": "sample-16",
+    "category": "water",
+    "task": "caption",
+    "question": "Provide a detailed overview of the coastline, tidal mudflats, and surrounding marine waters.",
+    "target_feature": "coastal_water",
+    "expected_concepts": ["coastline", "marine", "water", "tidal"]
+  },
+  {
+    "id": "sample-17",
+    "category": "vegetation",
+    "task": "ground",
+    "question": "dense forest grove",
+    "target_feature": "forest",
+    "reference_boxes": [
+      [0.05, 0.05, 0.40, 0.40]
+    ]
+  },
+  {
+    "id": "sample-18",
+    "category": "agriculture",
+    "task": "vqa",
+    "question": "Are center-pivot circular irrigation fields or rectangular strip parcels predominant here?",
+    "target_feature": "agriculture",
+    "expected_keywords": ["irrigation", "circular", "parcel", "field", "crop"]
+  },
+  {
+    "id": "sample-19",
+    "category": "aircraft",
+    "task": "vqa",
+    "question": "How many large transport or commercial aircraft can be discerned on the runway tarmac?",
+    "target_feature": "aircraft",
+    "expected_keywords": ["aircraft", "tarmac", "runway", "plane"]
+  },
+  {
+    "id": "sample-20",
+    "category": "ships",
+    "task": "vqa",
+    "question": "Are there container ships underway in the navigation channel?",
+    "target_feature": "ship",
+    "expected_keywords": ["ship", "vessel", "channel", "water"]
+  },
+  {
+    "id": "sample-21",
+    "category": "ports",
+    "task": "ground",
+    "question": "container crane gantry",
+    "target_feature": "crane",
+    "reference_boxes": [
+      [0.30, 0.40, 0.45, 0.60]
+    ]
+  },
+  {
+    "id": "sample-22",
+    "category": "industrial_infrastructure",
+    "task": "ground",
+    "question": "solar photovoltaic panel array",
+    "target_feature": "solar_panel",
+    "reference_boxes": [
+      [0.60, 0.20, 0.90, 0.80]
+    ]
+  },
+  {
+    "id": "sample-23",
+    "category": "urban_expansion",
+    "task": "caption",
+    "question": "Summarize the boundary transition between developed urban structures and surrounding natural landscape.",
+    "target_feature": "urban_boundary",
+    "expected_concepts": ["urban", "transition", "landscape", "boundary", "structure"]
+  },
+  {
+    "id": "sample-24",
+    "category": "land_cover",
+    "task": "vqa",
+    "question": "What is the estimated proportion of bare soil versus vegetated surface in this rural scene?",
+    "target_feature": "land_cover",
+    "expected_keywords": ["soil", "vegetation", "surface", "bare"]
+  },
+  {
+    "id": "sample-25",
+    "category": "object_localization",
+    "task": "ground",
+    "question": "athletic stadium",
+    "target_feature": "stadium",
+    "reference_boxes": [
+      [0.35, 0.35, 0.65, 0.65]
+    ]
+  }
+]

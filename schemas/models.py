@@ -1,4 +1,4 @@
-﻿"""
+"""
 Pydantic data-contract models shared across the entire SatQuery AI stack.
 All tool inputs, outputs, API responses, and inter-node state payloads conform to these schemas.
 """
@@ -40,8 +40,16 @@ class IntentSchema(BaseModel):
     )
     spatial_scope: Optional[str] = Field(default="entire_scene", description="Spatial scope or ROI name")
     modality: Optional[str] = Field(default="optical", description="Required sensor modality")
+    requires_temporal_pair: bool = Field(default=False, description="Whether task requires multi-date image pairs")
+    requires_cross_modal_pair: bool = Field(default=False, description="Whether task requires multimodal (optical+SAR) pair")
+    ambiguous: bool = Field(default=False, description="Whether user intent is ambiguous")
+    clarification_needed: bool = Field(default=False, description="Whether user clarification is recommended")
+    classifier_source: str = Field(default="rule_primary", description="'llm' | 'rule_fallback' | 'rule_primary'")
+    fallback_used: bool = Field(default=False, description="Whether rule-based fallback was activated")
+    fallback_reason: Optional[str] = Field(default=None, description="Reason for fallback activation if applicable")
     workflow: List[str] = Field(default_factory=list, description="Ordered list of specialist tool IDs to execute")
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0, description="Intent classification confidence")
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Intent classification confidence")
+    confidence_status: str = Field(default="uncalibrated", description="'calibrated' | 'uncalibrated' | 'unavailable'")
     reasoning: str = Field(default="", description="Human-readable classification rationale")
 
 
@@ -76,7 +84,8 @@ class ToolResult(BaseModel):
     """Standardised output from any specialist tool — the common currency of the agent."""
     tool_id: str = Field(..., description="Identifier of the executing tool")
     answer: str = Field(..., description="Tool-level textual summary of findings")
-    confidence: float = Field(..., ge=0.0, le=1.0, description="Calibrated confidence score [0.0, 1.0]")
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Calibrated confidence score [0.0, 1.0] if available")
+    confidence_status: str = Field(default="calibrated", description="'calibrated' | 'uncalibrated' | 'unavailable'")
     evidence: List[EvidenceItem] = Field(default_factory=list, description="Verified spatial evidence items")
     evidence_image_b64: Optional[str] = Field(default=None, description="Base64 encoded PNG overlay data URI")
     metadata: Dict[str, Any] = Field(default_factory=dict, description="Tool-specific quantitative metrics")
@@ -96,7 +105,8 @@ class AgentResponse(BaseModel):
     session_id: str
     query: str
     final_answer: str
-    confidence: float
+    confidence: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="Overall confidence score [0.0, 1.0]")
+    confidence_status: str = Field(default="calibrated", description="'calibrated' | 'uncalibrated' | 'unavailable'")
     tool_results: List[ToolResult]
     geojson: Optional[Dict[str, Any]] = Field(default=None, description="Canonical GeoJSON FeatureCollection")
     trace_id: str

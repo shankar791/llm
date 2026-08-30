@@ -1,4 +1,4 @@
-﻿# System Architecture
+# System Architecture
 
 This document defines the high-level technical architecture, component boundaries, and data flows for SatQuery AI.
 
@@ -58,6 +58,83 @@ This document defines the high-level technical architecture, component boundarie
 |   - Multi-step execution audit trace with millisecond timings                 |
 +-------------------------------------------------------------------------------+
 ```
+
+## Model Separation & Architectural Responsibilities
+
+SatQuery AI strictly enforces functional separation across specialized models and deterministic engines:
+
+| Subsystem / Model | Implementation Location | Concrete Engine / Model | Architectural Responsibility |
+|---|---|---|---|
+| **Text NLP / LLM** | `ai/llm/`, `ai/intent/`, `ai/synthesis/` | **Qwen3-14B** (`qwen/qwen3-14b:free` via OpenRouter) | Intent classification, query understanding, reasoning assistance, grounded synthesis, and response refinement. |
+| **Vision Language Models** | `ai/vision/` | **Qwen3-VL-8B** & **Qwen2.5-VL-7B** (OpenRouter) / **GeoChat** | High-level image understanding: single-image VQA (`T1`), Captioning (`T2`), Grounding / Box localization (`T3`). |
+| **Bi-temporal Specialist** | `models/changeformer/` | **ChangeFormer** (Siamese ViT) | Bi-temporal pixel-level change detection & binary change masking (`T4`). |
+| **Cross-Modal Specialist** | `models/earthgpt/` | **EarthGPT** | Optical + SAR radar feature fusion (`T5`). |
+| **Zero-Shot Fallback** | `models/remoteclip/` | **RemoteCLIP** | Visual embedding similarity fallback when confidence < threshold. |
+| **Deterministic GIS Engine** | `gis/` | **Python / Rasterio / Shapely / GeoPandas** | Authoritative surface area ($m^2$, ha), polygon geometries, CRS transforms. |
+| **Evidence & Validation Engine** | `ai/synthesis/validator.py` | **SynthesisValidator** | Strict anti-hallucination post-validation; ensures zero altered GIS facts. |
+
+## Provider-Agnostic LLM Foundation (`ai/llm/`)
+
+The Master Agent and its supporting nodes interact with language models through a strictly decoupled, vendor-agnostic Protocol interface (`LLMProvider` in `ai/llm/base.py`).
+
+### Key Capabilities:
+1. **Vendor Agnostic**: Compatible with any OpenAI-style Chat Completions endpoint (OpenAI, OpenRouter, Groq, Together, Ollama, vLLM).
+2. **Structured Output**: Native support for `response_format={"type": "json_object"}` with `LLMResponse.json()` helper parsing.
+3. **Transient Fault Tolerance**: Automatic exponential backoff with jitter on HTTP 429, 500, 502, 503, 504 and network timeouts. Immediate fail-fast on HTTP 401/403/400.
+4. **Offline Determinism**: `MockLLMProvider` enables 100% offline, deterministic CI/CD and unit testing without external API tokens.
+5. **Observability**: Exposes per-request `latency_ms`, token `usage`, and sanitized diagnostics without leaking secrets or full prompts.
+
+## Intent Classification & Routing Boundary
+
+SatQuery AI enforces strict architectural separation between natural language interpretation and specialist execution:
+
+```
+User Query + Metadata
+        ↓
+[LLMIntentClassifier] (Pydantic validation, structured JSON, task enum)
+        ↓
+  IntentResult (task, target, temporal_scope, requires_pair, ambiguous)
+        ↓
+[Compatibility Gate] (Deterministic validation of actual image count, modality, CRS)
+        ↓
+[Master Router] (Authoritative tool assignment from ToolRegistry: T1..T5)
+```
+
+- **LLM Responsibility**: Semantic interpretation, task classification (`vqa`, `caption`, `ground`, `change`, `fusion`), target concepts, temporal boundaries, and ambiguity flags. The LLM **NEVER** dictates authoritative tool IDs or execution workflows.
+- **Compatibility Gate**: Deterministic Python rules verifying whether uploaded rasters satisfy task requirements.
+- **Master Router**: Authoritative tool dispatcher that binds validated requirements to specialist models.
+
+## Evidence-Grounded LLM Synthesis (`ai/synthesis/`)
+
+Final response generation uses `LLMSynthesizer` (`ai/synthesis/llm.py`) backed by `ai.llm.LLMProvider`.
+
+### Core Grounding & Anti-Hallucination Rules:
+1. **Factual Grounding**: The LLM is supplied only structured `ToolResult`s, `EvidenceItem`s, and authoritative GIS metrics (e.g. `area_ha`, `polygon_count`, `change_fraction`). Raw images and full graph states are never passed.
+2. **Structured Output & Claims**: Emits `SynthesisPayload` with explicit `claims` mapping text statements to valid `evidence_ids` (e.g. `["E1", "E2"]`).
+3. **Deterministic Post-Validation**: `SynthesisValidator` performs strict post-generation verification:
+   - Validates that every referenced evidence ID exists in the supplied context (rejection of fake/invented IDs).
+   - Validates numeric quantities (hectares, polygon counts, percentages, dates) against authoritative GIS measurements.
+   - Forbids fabricated calibrated confidence claims (e.g. "98% confident") when model confidence is uncalibrated.
+4. **Deterministic Fallback**: If LLM generation fails or the post-validator detects a hallucination, the system immediately switches to `DeterministicFallbackFormatter` (`synthesis_source="deterministic_fallback"`), ensuring high availability and 100% factual accuracy.
+
+## Multimodal Vision Provider Subsystem (`ai/vision/`)
+
+SatQuery AI decouples high-level vision tools (`T1_VQA`, `T2_Caption`, `T3_Ground`) from concrete model implementations via the `VisionProvider` Protocol interface.
+
+### Supported Providers:
+1. **Qwen2.5-VL via OpenRouter**:
+   - Model Slug: `qwen/qwen-2.5-vl-7b-instruct:free` (or `qwen/qwen-2.5-vl-7b-instruct`)
+   - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
+   - Image Encoding: Base64 data URLs (`data:image/jpeg;base64,...`) with dynamic image dimension extraction.
+   - Structured Grounding: Requests structured JSON `{"objects": [{"label": "...", "box": [x0, y0, x1, y1]}]}` and converts normalized coordinates into pixel bounding boxes `[ymin, xmin, ymax, xmax]`.
+2. **Qwen3-VL-8B via OpenRouter**:
+   - Model Slug: `qwen/qwen3-vl-8b-instruct` (or `qwen/qwen3-vl-8b-instruct:free`)
+   - Enhanced spatial reasoning for object localization and fine-grained visual groundings.
+   - Task-level routing supported via `VISION_VQA_MODEL`, `VISION_CAPTION_MODEL`, and `VISION_GROUND_MODEL`.
+3. **GeoChat (Optional Specialist Adapter)**:
+   - Preserved under `models/geochat/adapter.py` for direct weights inference and comparative benchmarking.
+4. **MockVisionProvider (Deterministic Testing)**:
+   - Enables 100% offline, fast CI/CD execution without consuming remote API rate limits.
 
 ## System Components
 
