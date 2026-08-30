@@ -65,8 +65,8 @@ SatQuery AI strictly enforces functional separation across specialized models an
 
 | Subsystem / Model | Implementation Location | Concrete Engine / Model | Architectural Responsibility |
 |---|---|---|---|
-| **Text NLP / LLM** | `ai/llm/`, `ai/intent/`, `ai/synthesis/` | **Qwen3-14B** (`qwen/qwen3-14b:free` via OpenRouter) | Intent classification, query understanding, reasoning assistance, grounded synthesis, and response refinement. |
-| **Vision Language Models** | `ai/vision/` | **Qwen3-VL-8B** & **Qwen2.5-VL-7B** (OpenRouter) / **GeoChat** | High-level image understanding: single-image VQA (`T1`), Captioning (`T2`), Grounding / Box localization (`T3`). |
+| **Text NLP / LLM** | `ai/llm/`, `ai/intent/`, `ai/synthesis/` | **NVIDIA Nemotron 3 Ultra 550B** / **Qwen3-14B** (OpenRouter) | Intent classification, query understanding, reasoning assistance, grounded synthesis, and response refinement. |
+| **Vision Language Models** | `ai/vision/` | **Gemma 4 26B**, **Gemma 4 31B**, **Nemotron 3 Nano Omni** (OpenRouter) / **GeoChat** | High-level image understanding: single-image VQA (`T1`), Captioning (`T2`), Grounding / Box localization (`T3`) with multi-model fallback. |
 | **Bi-temporal Specialist** | `models/changeformer/` | **ChangeFormer** (Siamese ViT) | Bi-temporal pixel-level change detection & binary change masking (`T4`). |
 | **Cross-Modal Specialist** | `models/earthgpt/` | **EarthGPT** | Optical + SAR radar feature fusion (`T5`). |
 | **Zero-Shot Fallback** | `models/remoteclip/` | **RemoteCLIP** | Visual embedding similarity fallback when confidence < threshold. |
@@ -117,24 +117,27 @@ Final response generation uses `LLMSynthesizer` (`ai/synthesis/llm.py`) backed b
    - Forbids fabricated calibrated confidence claims (e.g. "98% confident") when model confidence is uncalibrated.
 4. **Deterministic Fallback**: If LLM generation fails or the post-validator detects a hallucination, the system immediately switches to `DeterministicFallbackFormatter` (`synthesis_source="deterministic_fallback"`), ensuring high availability and 100% factual accuracy.
 
-## Multimodal Vision Provider Subsystem (`ai/vision/`)
+## Resilient Multi-Model Multimodal Vision Provider Subsystem (`ai/vision/`)
 
-SatQuery AI decouples high-level vision tools (`T1_VQA`, `T2_Caption`, `T3_Ground`) from concrete model implementations via the `VisionProvider` Protocol interface.
+SatQuery AI decouples high-level vision tools (`T1_VQA`, `T2_Caption`, `T3_Ground`) from concrete model implementations via the `VisionProvider` Protocol interface with multi-model resilience and fallback routing.
 
-### Supported Providers:
-1. **Qwen2.5-VL via OpenRouter**:
-   - Model Slug: `qwen/qwen-2.5-vl-7b-instruct:free` (or `qwen/qwen-2.5-vl-7b-instruct`)
-   - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
-   - Image Encoding: Base64 data URLs (`data:image/jpeg;base64,...`) with dynamic image dimension extraction.
-   - Structured Grounding: Requests structured JSON `{"objects": [{"label": "...", "box": [x0, y0, x1, y1]}]}` and converts normalized coordinates into pixel bounding boxes `[ymin, xmin, ymax, xmax]`.
-2. **Qwen3-VL-8B via OpenRouter**:
-   - Model Slug: `qwen/qwen3-vl-8b-instruct` (or `qwen/qwen3-vl-8b-instruct:free`)
-   - Enhanced spatial reasoning for object localization and fine-grained visual groundings.
-   - Task-level routing supported via `VISION_VQA_MODEL`, `VISION_CAPTION_MODEL`, and `VISION_GROUND_MODEL`.
-3. **GeoChat (Optional Specialist Adapter)**:
-   - Preserved under `models/geochat/adapter.py` for direct weights inference and comparative benchmarking.
-4. **MockVisionProvider (Deterministic Testing)**:
-   - Enables 100% offline, fast CI/CD execution without consuming remote API rate limits.
+### Configured Vision Models:
+1. **Primary Vision Model**: `google/gemma-4-26b-a4b-it:free` (`VISION_PRIMARY_MODEL`)
+2. **Secondary Vision Model**: `google/gemma-4-31b-it:free` (`VISION_SECONDARY_MODEL`)
+3. **Tertiary Vision Model**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (`VISION_TERTIARY_MODEL`)
+
+### Task-Level Routing Policies:
+- **`T1_VQA`**: Primary: Gemma 4 26B -> Fallbacks: Gemma 4 31B -> Nemotron 3 Nano Omni.
+- **`T2_Caption`**: Primary: Gemma 4 26B -> Fallbacks: Gemma 4 31B -> Nemotron 3 Nano Omni.
+- **`T3_Ground`**: Primary: Gemma 4 31B -> Fallbacks: Gemma 4 26B -> Nemotron 3 Nano Omni.
+
+### Fallback Logic & Rate-Limit Handling:
+- **Transient Failures (Fallback Triggered)**: Upstream 429 concurrency pool limits, 5xx server errors, socket timeouts, and provider connection drops automatically trigger fallback to the next candidate model in the chain.
+- **Account-Level Rate Limits (Immediate Fail-Fast)**: If OpenRouter returns `free-models-per-day` or account quota exhaustion, the system classifies it as `ACCOUNT_RATE_LIMIT` and immediately halts to avoid wasting API calls across fallback models.
+- **Non-Transient Errors (No Fallback)**: Malformed application inputs (400) or missing credentials (401/403) fail immediately without fallback loops.
+- **Structured Grounding Validation**: Requires machine-readable bounding boxes with normalized coordinates $0 \le x_0 \le x_1 \le 1, 0 \le y_0 \le y_1 \le 1$. If a candidate returns unstructured natural language, it is marked `grounding_unsupported` and fails over to the next candidate model without fabricating fake boxes.
+- **Observability**: `VisionResponse` and tool metadata explicitly record `selected_model`, `attempted_models`, `fallback_used`, `fallback_reason`, and `latency_ms`.
+
 
 ## System Components
 

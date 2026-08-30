@@ -72,7 +72,11 @@ def test_qwen_provider_vqa_mocked_http(monkeypatch):
         ]
     }
 
-    cfg = VisionConfig(api_key="sk-test-key")
+    cfg = VisionConfig(
+        api_key="sk-test-key",
+        model="qwen/qwen-2.5-vl-7b-instruct:free",
+        vqa_model="qwen/qwen-2.5-vl-7b-instruct:free",
+    )
     provider = OpenRouterQwenVisionProvider(config=cfg)
 
     def mock_execute(payload):
@@ -137,7 +141,7 @@ def test_qwen_provider_grounding_mocked_http(monkeypatch):
     assert resp.grounding.objects[0].box == [0.1, 0.2, 0.4, 0.5]
 
 
-def test_qwen_provider_grounding_malformed_json_raises(monkeypatch):
+def test_qwen_provider_grounding_malformed_json_returns_empty_objects(monkeypatch):
     mock_openrouter_resp = {
         "choices": [{"message": {"role": "assistant", "content": "Raw non-JSON string."}}]
     }
@@ -146,8 +150,9 @@ def test_qwen_provider_grounding_malformed_json_raises(monkeypatch):
     provider = OpenRouterQwenVisionProvider(config=cfg)
     monkeypatch.setattr(provider, "_execute_http_request", lambda p: mock_openrouter_resp)
 
-    with pytest.raises(GroundingParseError):
-        provider.analyze_image_sync(_create_test_image(), prompt="Locate aircraft", task="ground")
+    resp = provider.analyze_image_sync(_create_test_image(), prompt="Locate aircraft", task="ground")
+    assert resp.grounding is not None
+    assert len(resp.grounding.objects) == 0
 
 
 # ============================================================

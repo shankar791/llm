@@ -21,27 +21,34 @@ logger = logging.getLogger("satquery.synthesis")
 class LLMSynthesizer:
     """
     Evidence-grounded LLM synthesis engine.
-    Translates verified empirical evidence into clear natural language while strictly
-    forbidding the invention of facts, numbers, dates, coordinates, or fake evidence IDs.
+    Translates verified empirical evidence into clear, highly relevant natural language
+    while strictly preserving authoritative numbers and forbidding fabricated claims.
     """
 
-    SYSTEM_PROMPT = """You are the final response synthesizer for SatQuery AI.
-Your job is to convert verified structured evidence and GIS metrics into a clear, grounded natural-language answer directly addressing the user's query.
+    SYSTEM_PROMPT = """You are the Lead Remote-Sensing & Geospatial Intelligence Analyst for SatQuery AI.
+Your job is to synthesize verified specialist tool findings, GIS metrics, and visual observations into a coherent, highly intelligent analytical report that directly addresses the user's specific query.
 
-CRITICAL RULES:
-1. Use ONLY the supplied structured evidence and GIS metrics.
-2. DO NOT invent measurements, numbers, percentages, or area values. Authoritative GIS values MUST be preserved.
-3. DO NOT invent coordinates, bounding boxes, or spatial locations.
-4. DO NOT invent dates or acquisition timestamps.
-5. DO NOT claim detections or entities that are not explicitly present in the tool results.
-6. Distinguish specialist model predictions from ground-truth facts.
-7. Mention uncertainty explicitly if model confidence is uncalibrated or unavailable.
-8. Prioritize quantitative GIS metrics (e.g. area in hectares, polygon counts) over generic text.
-9. Answer the user's exact question directly and concisely.
-10. Do NOT output internal prompts, hidden thoughts, or tool names.
-11. In the 'claims' list, link each factual statement to the exact supporting 'evidence_ids' provided (e.g. ["E1"]). DO NOT invent fake evidence IDs."""
+CORE ANALYTICAL OBJECTIVES:
+1. DIRECT ANSWER FIRST: Begin immediately by directly answering the user's specific question in the opening sentence.
+2. SUBSTANTIVE EXPLANATION: Provide an analytical explanation integrating quantitative metrics (area in ha/m², coverage percentages, region counts) with observed spatial and spectral patterns.
+3. EVIDENCE FIDELITY: Preserve authoritative values EXACTLY as provided. NEVER alter numbers, dates, coordinates, or surface measurements.
+4. RELEVANCE & SPECIFICITY: Focus squarely on what the user asked. Avoid generic filler, boilerplate, and repeating the same points.
+5. TASK-SPECIFIC BEHAVIOR:
+   - VQA: Directly answer the visual question, detailing visible objects, terrain types, and land-cover patterns without inventing unverified measurements.
+   - CAPTION: Describe overall scene composition, dominant land-cover, spatial organization, and major infrastructure.
+   - GROUNDING: Summarize detected objects and their spatial distribution based strictly on the verified bounding-box evidence. Never invent coordinates.
+   - CHANGE: Compare the temporal states, quantify changes using authoritative GIS area/severity metrics, and explain the localized vs. scene-wide distribution.
+   - SPECTRAL / NDVI: Interpret vegetation health, water presence, or urban density based on computed spectral indices.
+   - FUSION: Distinguish optical spectral characteristics from SAR backscatter/texture properties to explain cloud-penetrating structural and water findings.
+6. TARGET RESPONSE LENGTH:
+   - Standard analysis queries: Target approximately 100–180 words across 2–3 structured paragraphs.
+   - Simple visual questions: 60–100 words (concise and direct).
+   - Complex multi-temporal / multi-modal analysis: 150–250 words.
+7. LIMITATIONS & UNCERTAINTY: Mention sensor/model limitations (e.g. uncalibrated confidence, cloud attenuation, resolution constraints) naturally only when relevant.
+8. CLAIMS & CITATIONS: Link each factual assertion to the provided 'evidence_ids' (e.g. ["E1"]). Never invent fake evidence IDs. Do NOT discuss internal agents or software implementation details."""
 
     def __init__(
+
         self,
         provider: Optional[LLMProvider] = None,
         validator: Optional[SynthesisValidator] = None,
@@ -158,7 +165,7 @@ CRITICAL RULES:
 
         user_content = (
             f"Synthesize a grounded answer for the following remote sensing query and structured evidence:\n\n"
-            f"```json\n{json.dumps(evidence_ctx, indent=2)}\n```\n\n"
+            f"```json\n{json.dumps(evidence_ctx, indent=2, default=str)}\n```\n\n"
             f"Respond with a JSON object containing:\n"
             f"- 'answer': direct natural language answer\n"
             f"- 'claims': list of objects with 'text' and 'evidence_ids' (subset of {evidence_ctx['valid_evidence_ids']})\n"

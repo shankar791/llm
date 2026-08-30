@@ -9,12 +9,13 @@ This document details the external machine learning models integrated into SatQu
 
 ## Model Adapter Directory Layout
 
+```
 ai/
-  ├── llm/                        # Provider-agnostic text LLM foundation
-  ├── vision/                     # Multimodal VisionProvider subsystem
+  ├── llm/                        # Provider-agnostic text LLM foundation (OpenRouter / OpenAI)
+  ├── vision/                     # Resilient Multimodal VisionProvider subsystem
   │     ├── base.py               # VisionProvider Protocol, GroundingBox, VisionResponse
-  │     ├── openrouter_qwen.py    # OpenRouter provider (Qwen2.5-VL & Qwen3-VL-8B)
-  │     ├── config.py             # VisionConfig & task-level model resolution
+  │     ├── openrouter_qwen.py    # OpenRouterVisionProvider with multi-model fallback & rate-limit resilience
+  │     ├── config.py             # VisionConfig (Primary, Secondary, Tertiary model hierarchy & task fallbacks)
   │     └── mock.py               # MockVisionProvider
   ├── intent/                     # LLM Intent Classifier
   └── synthesis/                  # Evidence-Grounded LLM Synthesizer
@@ -43,6 +44,30 @@ tools/
   ├── optical_sar.py              # OpticalSARTool (T5_OpticalSAR)
   └── fallback.py                 # FallbackTool (RemoteCLIP)
 ```
+
+---
+
+## Multimodal Vision Model Hierarchy & Task Routing (Step 12C)
+
+The `ai.vision.OpenRouterVisionProvider` orchestrates a resilient multi-model selection and fallback layer for visual satellite analysis:
+
+### 1. Vision Model Roster
+- **Primary Vision Model**: `google/gemma-4-26b-a4b-it:free` (`VISION_PRIMARY_MODEL`)
+- **Secondary Vision Model**: `google/gemma-4-31b-it:free` (`VISION_SECONDARY_MODEL`)
+- **Tertiary Vision Model**: `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` (`VISION_TERTIARY_MODEL`)
+
+### 2. Task Routing Policy
+- **T1 VQA**: `VISION_VQA_MODEL` (default: Gemma 4 26B) -> `VISION_VQA_FALLBACKS` (Gemma 4 31B, Nemotron 3 Nano Omni)
+- **T2 Caption**: `VISION_CAPTION_MODEL` (default: Gemma 4 26B) -> `VISION_CAPTION_FALLBACKS` (Gemma 4 31B, Nemotron 3 Nano Omni)
+- **T3 Grounding**: `VISION_GROUND_MODEL` (default: Gemma 4 31B) -> `VISION_GROUND_FALLBACKS` (Gemma 4 26B, Nemotron 3 Nano Omni)
+
+### 3. Error Classification & Fallback Behavior
+- **Transient Failures (Fallback Triggered)**: Upstream 429 concurrency pool limits, 5xx server errors, socket timeouts, and provider connection drops automatically trigger fallback to the next candidate model in the chain.
+- **Account-Level Rate Limits (Immediate Fail-Fast)**: If OpenRouter returns `free-models-per-day` or account quota exhaustion, the system classifies it as `ACCOUNT_RATE_LIMIT` and immediately halts to avoid wasting API calls across fallback models.
+- **Non-Transient Errors (No Fallback)**: Malformed application inputs (400) or missing credentials (401/403) fail immediately without fallback loops.
+- **Strict Grounding Validation**: Requires machine-readable bounding boxes with normalized coordinates $0 \le x_0 \le x_1 \le 1, 0 \le y_0 \le y_1 \le 1$. If a candidate returns unstructured natural language, it is marked `grounding_unsupported` and fails over to the next candidate model without fabricating fake boxes.
+- **Observability**: `VisionResponse` and tool metadata explicitly record `selected_model`, `attempted_models`, `fallback_used`, `fallback_reason`, and `latency_ms`.
+
 
 ---
 

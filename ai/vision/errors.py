@@ -26,7 +26,17 @@ class VisionAuthenticationError(VisionError):
 
 class VisionRateLimitError(VisionError):
     """Raised on HTTP 429 rate-limiting from remote providers."""
-    pass
+    def __init__(
+        self,
+        message: str,
+        provider: Optional[str] = None,
+        status_code: Optional[int] = 429,
+        is_account_limit: bool = False,
+        retry_after: Optional[float] = None,
+    ):
+        super().__init__(message, provider=provider, status_code=status_code)
+        self.is_account_limit = is_account_limit
+        self.retry_after = retry_after
 
 
 class VisionTimeoutError(VisionError):

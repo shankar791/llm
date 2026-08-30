@@ -1,15 +1,21 @@
 """
 Configuration management for the SatQuery AI Vision subsystem.
-Supports Qwen2.5-VL and Qwen3-VL models with task-level selection.
+Supports multi-model routing and fallbacks across OpenRouter vision models:
+- Primary: google/gemma-4-26b-a4b-it:free
+- Secondary: google/gemma-4-31b-it:free
+- Tertiary: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
 """
 from __future__ import annotations
+from dataclasses import dataclass, field
 import os
-from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 
-# Canonical OpenRouter Model Slugs for Qwen VL series
+# Canonical OpenRouter Model Slugs
 MODEL_SLUGS: Dict[str, str] = {
+    "gemma_26b": "google/gemma-4-26b-a4b-it:free",
+    "gemma_31b": "google/gemma-4-31b-it:free",
+    "nemotron_nano": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "qwen25_free": "qwen/qwen-2.5-vl-7b-instruct:free",
     "qwen25": "qwen/qwen-2.5-vl-7b-instruct",
     "qwen3": "qwen/qwen3-vl-8b-instruct",
@@ -18,8 +24,34 @@ MODEL_SLUGS: Dict[str, str] = {
     "qwen3_235b": "qwen/qwen3-vl-235b-a22b-instruct",
 }
 
+# Default Vision Models
+DEFAULT_VISION_PRIMARY_MODEL = MODEL_SLUGS["gemma_26b"]
+DEFAULT_VISION_SECONDARY_MODEL = MODEL_SLUGS["gemma_31b"]
+DEFAULT_VISION_TERTIARY_MODEL = MODEL_SLUGS["nemotron_nano"]
+
+# Default Task Models & Fallback Lists
+DEFAULT_VISION_VQA_MODEL = DEFAULT_VISION_PRIMARY_MODEL
+DEFAULT_VISION_VQA_FALLBACKS = [DEFAULT_VISION_SECONDARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+
+DEFAULT_VISION_CAPTION_MODEL = DEFAULT_VISION_PRIMARY_MODEL
+DEFAULT_VISION_CAPTION_FALLBACKS = [DEFAULT_VISION_SECONDARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+
+DEFAULT_VISION_GROUND_MODEL = DEFAULT_VISION_SECONDARY_MODEL
+DEFAULT_VISION_GROUND_FALLBACKS = [DEFAULT_VISION_PRIMARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+
 # User-friendly short aliases
 MODEL_ALIASES: Dict[str, str] = {
+    "gemma_26b": MODEL_SLUGS["gemma_26b"],
+    "gemma-26b": MODEL_SLUGS["gemma_26b"],
+    "gemma-4-26b": MODEL_SLUGS["gemma_26b"],
+    "gemma-4-26b-a4b-it": MODEL_SLUGS["gemma_26b"],
+    "gemma_31b": MODEL_SLUGS["gemma_31b"],
+    "gemma-31b": MODEL_SLUGS["gemma_31b"],
+    "gemma-4-31b": MODEL_SLUGS["gemma_31b"],
+    "gemma-4-31b-it": MODEL_SLUGS["gemma_31b"],
+    "nemotron": MODEL_SLUGS["nemotron_nano"],
+    "nemotron_nano": MODEL_SLUGS["nemotron_nano"],
+    "nemotron-3-nano": MODEL_SLUGS["nemotron_nano"],
     "qwen25": MODEL_SLUGS["qwen25_free"],
     "qwen2.5": MODEL_SLUGS["qwen25_free"],
     "qwen2.5-vl": MODEL_SLUGS["qwen25_free"],
@@ -31,12 +63,20 @@ MODEL_ALIASES: Dict[str, str] = {
 }
 
 
-def resolve_model_slug(raw_name: Optional[str], default: str = MODEL_SLUGS["qwen25_free"]) -> str:
+def resolve_model_slug(raw_name: Optional[str], default: str = DEFAULT_VISION_PRIMARY_MODEL) -> str:
     """Resolve a model name or alias to its canonical OpenRouter slug."""
     if not raw_name:
         return default
     normalized = raw_name.strip().lower()
     return MODEL_ALIASES.get(normalized, raw_name.strip())
+
+
+def parse_model_list(raw_list: Optional[str], default_list: List[str]) -> List[str]:
+    """Parse comma-separated model slugs or aliases into a list of canonical model slugs."""
+    if not raw_list:
+        return list(default_list)
+    items = [resolve_model_slug(item.strip()) for item in raw_list.split(",") if item.strip()]
+    return items if items else list(default_list)
 
 
 @dataclass(frozen=True)
@@ -45,32 +85,66 @@ class VisionConfig:
     Configuration for remote multimodal vision providers.
     Secrets are automatically masked in logging and string representations.
     """
-    provider: str = "qwen_openrouter"
-    model: str = MODEL_SLUGS["qwen25_free"]
-    vqa_model: Optional[str] = None
-    caption_model: Optional[str] = None
-    ground_model: Optional[str] = None
+    provider: str = "openrouter"
+    primary_model: str = DEFAULT_VISION_PRIMARY_MODEL
+    secondary_model: str = DEFAULT_VISION_SECONDARY_MODEL
+    tertiary_model: str = DEFAULT_VISION_TERTIARY_MODEL
+    model: str = DEFAULT_VISION_PRIMARY_MODEL
+    vqa_model: str = DEFAULT_VISION_VQA_MODEL
+    vqa_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_VQA_FALLBACKS)
+    caption_model: str = DEFAULT_VISION_CAPTION_MODEL
+    caption_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_CAPTION_FALLBACKS)
+    ground_model: str = DEFAULT_VISION_GROUND_MODEL
+    ground_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_GROUND_FALLBACKS)
     base_url: str = "https://openrouter.ai/api/v1"
     api_key: Optional[str] = None
     timeout: float = 45.0
     max_retries: int = 2
 
+    def __post_init__(self):
+        # If custom model/primary_model was passed, synchronize task models if they were at default
+        effective_primary = self.primary_model if self.primary_model != DEFAULT_VISION_PRIMARY_MODEL else self.model
+        if effective_primary != DEFAULT_VISION_PRIMARY_MODEL:
+            object.__setattr__(self, "primary_model", effective_primary)
+            object.__setattr__(self, "model", effective_primary)
+            if self.vqa_model == DEFAULT_VISION_VQA_MODEL:
+                object.__setattr__(self, "vqa_model", effective_primary)
+            if self.caption_model == DEFAULT_VISION_CAPTION_MODEL:
+                object.__setattr__(self, "caption_model", effective_primary)
+
     @classmethod
     def from_env(cls) -> VisionConfig:
         """Load vision configuration from environment variables."""
-        provider = os.environ.get("VISION_PROVIDER", "qwen_openrouter").lower()
+        provider = os.environ.get("VISION_PROVIDER", "openrouter").lower()
         
-        raw_model = os.environ.get("VISION_MODEL", MODEL_SLUGS["qwen25_free"])
-        resolved_model = resolve_model_slug(raw_model)
+        raw_primary = os.environ.get("VISION_PRIMARY_MODEL") or os.environ.get("VISION_MODEL")
+        primary_model = resolve_model_slug(raw_primary, default=DEFAULT_VISION_PRIMARY_MODEL)
 
+        raw_secondary = os.environ.get("VISION_SECONDARY_MODEL")
+        secondary_model = resolve_model_slug(raw_secondary, default=DEFAULT_VISION_SECONDARY_MODEL)
+
+        raw_tertiary = os.environ.get("VISION_TERTIARY_MODEL")
+        tertiary_model = resolve_model_slug(raw_tertiary, default=DEFAULT_VISION_TERTIARY_MODEL)
+
+        # Task-specific Primary Models
         raw_vqa = os.environ.get("VISION_VQA_MODEL")
-        vqa_model = resolve_model_slug(raw_vqa, default=resolved_model) if raw_vqa else resolved_model
+        vqa_model = resolve_model_slug(raw_vqa, default=primary_model) if raw_vqa else primary_model
 
         raw_cap = os.environ.get("VISION_CAPTION_MODEL")
-        caption_model = resolve_model_slug(raw_cap, default=resolved_model) if raw_cap else resolved_model
+        caption_model = resolve_model_slug(raw_cap, default=primary_model) if raw_cap else primary_model
 
         raw_grd = os.environ.get("VISION_GROUND_MODEL")
-        ground_model = resolve_model_slug(raw_grd, default=resolved_model) if raw_grd else resolved_model
+        ground_model = resolve_model_slug(raw_grd, default=secondary_model) if raw_grd else secondary_model
+
+        # Task-specific Fallbacks
+        raw_vqa_fb = os.environ.get("VISION_VQA_FALLBACKS")
+        vqa_fallbacks = tuple(parse_model_list(raw_vqa_fb, [secondary_model, tertiary_model]))
+
+        raw_cap_fb = os.environ.get("VISION_CAPTION_FALLBACKS")
+        caption_fallbacks = tuple(parse_model_list(raw_cap_fb, [secondary_model, tertiary_model]))
+
+        raw_grd_fb = os.environ.get("VISION_GROUND_FALLBACKS")
+        ground_fallbacks = tuple(parse_model_list(raw_grd_fb, [primary_model, tertiary_model]))
 
         base_url = os.environ.get("VISION_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
         
@@ -91,10 +165,16 @@ class VisionConfig:
 
         return cls(
             provider=provider,
-            model=resolved_model,
+            primary_model=primary_model,
+            secondary_model=secondary_model,
+            tertiary_model=tertiary_model,
+            model=primary_model,
             vqa_model=vqa_model,
+            vqa_fallbacks=vqa_fallbacks,
             caption_model=caption_model,
+            caption_fallbacks=caption_fallbacks,
             ground_model=ground_model,
+            ground_fallbacks=ground_fallbacks,
             base_url=base_url,
             api_key=api_key,
             timeout=timeout,
@@ -102,20 +182,45 @@ class VisionConfig:
         )
 
     def get_model_for_task(self, task: str) -> str:
-        """Return the resolved model slug for a given vision task."""
-        if task == "vqa" and self.vqa_model:
+        """Return the resolved primary model slug for a given vision task."""
+        if task == "vqa":
             return self.vqa_model
-        elif task == "caption" and self.caption_model:
+        elif task == "caption":
             return self.caption_model
-        elif task == "ground" and self.ground_model:
+        elif task == "ground":
             return self.ground_model
         return self.model
+
+    def get_candidate_models_for_task(self, task: str) -> List[str]:
+        """
+        Return the ordered, deduplicated candidate models (primary followed by fallbacks)
+        for the given vision task.
+        """
+        if task == "vqa":
+            candidates = [self.vqa_model] + list(self.vqa_fallbacks)
+        elif task == "caption":
+            candidates = [self.caption_model] + list(self.caption_fallbacks)
+        elif task == "ground":
+            candidates = [self.ground_model] + list(self.ground_fallbacks)
+        else:
+            candidates = [self.model, self.secondary_model, self.tertiary_model]
+
+        # Deduplicate preserving order
+        seen = set()
+        deduped = []
+        for m in candidates:
+            if m and m not in seen:
+                seen.add(m)
+                deduped.append(m)
+        return deduped
 
     def __repr__(self) -> str:
         masked = "***" if self.api_key else "None"
         return (
-            f"VisionConfig(provider='{self.provider}', model='{self.model}', "
+            f"VisionConfig(provider='{self.provider}', primary_model='{self.primary_model}', "
+            f"secondary_model='{self.secondary_model}', tertiary_model='{self.tertiary_model}', "
             f"vqa_model='{self.vqa_model}', ground_model='{self.ground_model}', "
             f"base_url='{self.base_url}', api_key={masked}, "
             f"timeout={self.timeout}, max_retries={self.max_retries})"
         )
+

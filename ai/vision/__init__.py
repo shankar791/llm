@@ -29,13 +29,13 @@ from .errors import (
     VisionTimeoutError,
 )
 from .mock import MockVisionProvider
-from .openrouter_qwen import OpenRouterQwenVisionProvider
+from .openrouter_qwen import OpenRouterVisionProvider, OpenRouterQwenVisionProvider
 
 
 def get_vision_provider(config: Optional[VisionConfig] = None) -> VisionProvider:
     """
     Factory to instantiate the configured VisionProvider.
-    Defaults to OpenRouterQwenVisionProvider unless overridden.
+    Defaults to OpenRouterVisionProvider unless overridden.
     """
     cfg = config or VisionConfig.from_env()
     provider_key = cfg.provider.lower().strip()
@@ -43,10 +43,10 @@ def get_vision_provider(config: Optional[VisionConfig] = None) -> VisionProvider
     if provider_key in {"mock", "test"}:
         return MockVisionProvider()
     elif provider_key in {"openrouter", "qwen_openrouter", "openrouter_qwen", "qwen"}:
-        return OpenRouterQwenVisionProvider(config=cfg)
+        return OpenRouterVisionProvider(config=cfg)
     else:
-        # Default to OpenRouter Qwen
-        return OpenRouterQwenVisionProvider(config=cfg)
+        # Default to OpenRouter Vision Provider
+        return OpenRouterVisionProvider(config=cfg)
 
 
 __all__ = [
@@ -57,6 +57,7 @@ __all__ = [
     "VisionResponse",
     "VisionConfig",
     "get_vision_provider",
+    "OpenRouterVisionProvider",
     "OpenRouterQwenVisionProvider",
     "MockVisionProvider",
     "VisionError",

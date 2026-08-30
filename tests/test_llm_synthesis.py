@@ -210,7 +210,7 @@ def test_fallback_on_provider_timeout():
     assert res.fallback_used is True
     assert "LLMTimeoutError" in res.fallback_reason
     assert "12.40 hectares" in res.answer or "12.4" in res.answer
-    assert "Confidence is currently uncalibrated." in res.answer
+    assert "uncalibrated" in res.answer.lower()
 
 
 def test_fallback_on_provider_auth_error():
@@ -305,3 +305,53 @@ def test_vqa_tool_result_synthesis():
     assert res.synthesis_source == "llm"
     assert res.fallback_used is False
     assert "aircraft" in res.answer
+
+
+# ============================================================
+# 5. Analytical Quality & Question-Relevance Tests (Step 14)
+# ============================================================
+
+def test_fallback_analytical_paragraphs_and_relevance():
+    """Verify that deterministic fallback produces structured multi-sentence paragraphs."""
+    formatter = DeterministicFallbackFormatter()
+    res = formatter.format(
+        query="Did urban expansion occur between these two dates?",
+        tool_results=[SAMPLE_CHANGE_TOOL_RESULT],
+        confidence=None,
+        confidence_status="uncalibrated",
+        intent=SAMPLE_INTENT,
+    )
+    assert res.synthesis_source == "deterministic_fallback"
+    # Verify paragraph structure (at least 2 separated by newlines)
+    paragraphs = [p for p in res.answer.split("\n\n") if p.strip()]
+    assert len(paragraphs) >= 2
+    # Verify query direct answer
+    assert "bi-temporal" in res.answer.lower() or "change" in res.answer.lower()
+    # Verify quantitative metrics preservation
+    assert "12.40 hectares" in res.answer
+    assert "3 distinct cluster region(s)" in res.answer
+
+
+def test_fusion_fallback_analytical_quality():
+    """Verify cross-modal optical+SAR fallback generates clear analytical distinction."""
+    fusion_result = {
+        "tool_id": "T5_OpticalSAR",
+        "answer": "Optical–SAR joint analysis: water ~14.9% of scene, built-up ~13.5% of scene, vegetation ~44.1% of scene. SAR texture confirmed structural targets where optical was ambiguous.",
+        "confidence": 0.75,
+        "evidence": [
+            {"label": "water", "coverage_pct": 14.9},
+            {"label": "built-up", "coverage_pct": 13.5},
+        ],
+        "metadata": {"stats_pct": {"water": 14.9, "built-up": 13.5, "vegetation": 44.1}},
+    }
+    formatter = DeterministicFallbackFormatter()
+    res = formatter.format(
+        query="Use optical and SAR imagery together to analyze built-up and water-covered regions.",
+        tool_results=[fusion_result],
+        intent={"task": "fusion"},
+    )
+    assert "Optical and SAR" in res.answer
+    assert "14.9%" in res.answer
+    assert "13.5%" in res.answer
+    assert "SAR backscatter" in res.answer or "SAR texture" in res.answer
+

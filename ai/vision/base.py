@@ -66,6 +66,10 @@ class VisionResponse:
     latency_ms: float = 0.0
     provider: str = ""
     model: str = ""
+    selected_model: str = ""
+    attempted_models: List[str] = field(default_factory=list)
+    fallback_used: bool = False
+    fallback_reason: Optional[str] = None
 
 
 @runtime_checkable

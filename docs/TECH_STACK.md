@@ -28,13 +28,13 @@ This document defines the technology stack, library versions, and architectural 
 - **Orchestration Framework**: LangGraph (state machine managing graph nodes, conditional branches, and tool routing in `ai/graph/`)
 - **Data Contracts**: Pydantic v2 (strict request/response validation in `schemas/models.py`)
 - **Provider-Agnostic LLM Foundation (`ai/llm/`)**: Vendor-agnostic Protocol supporting OpenAI-compatible chat endpoints (OpenAI, OpenRouter, Groq, Together, Ollama, vLLM) with automatic transient retry, exponential backoff, and structured JSON output
-- **Multimodal Vision Foundation (`ai/vision/`)**: `VisionProvider` Protocol interface supporting multimodal vision models (`qwen/qwen-2.5-vl-7b-instruct:free`, `qwen/qwen3-vl-8b-instruct`, and optional `GeoChatAdapter` in `models/geochat/`)
+- **Resilient Multimodal Vision Foundation (`ai/vision/`)**: `VisionProvider` Protocol interface supporting multi-model hierarchy and fallbacks across OpenRouter free candidates (`google/gemma-4-26b-a4b-it:free`, `google/gemma-4-31b-it:free`, `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free`) with task-level routing and optional `GeoChatAdapter` in `models/geochat/`
 - **Intent & Synthesis Engine**: Configurable via `LLM_PROVIDER`, `LLM_MODEL`, `LLM_BASE_URL`, `LLM_API_KEY` with `MockLLMProvider` for deterministic testing
 - **Agent Architecture**: Single Master Agent / Orchestrator invoking specialized tools
 
 ### 3. Specialist Machine Learning Models (Isolated Adapters)
 - **Deep Learning Framework**: PyTorch (>= 2.2.0)
-- **Single-Image VQA / Caption / Ground**: Qwen2.5-VL / Qwen3-VL-8B (`ai/vision/`) + GeoChat (`models/geochat/`)
+- **Single-Image VQA / Caption / Ground**: Gemma 4 26B / Gemma 4 31B / Nemotron 3 Nano Omni (`ai/vision/`) + GeoChat (`models/geochat/`)
 - **Bi-Temporal Change Detection**: ChangeFormer (`Chen-Zhiang/ChangeFormer`, Siamese ViT)
 - **Optical + SAR Fusion**: EarthGPT (`wivizhang/EarthGPT`, multimodal instruction-tuned)
 - **Zero-Shot Fallback**: RemoteCLIP (`RemoteCLIP/RemoteCLIP`, ViT-B-32 remote-sensing visual backbone)

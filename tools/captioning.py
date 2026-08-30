@@ -74,7 +74,7 @@ class CaptioningTool(BaseTool):
             except Exception as e:
                 raise ToolExecutionError(f"GeoChat caption execution failed: {e}") from e
 
-        # Default to Qwen VisionProvider (OpenRouter)
+        # Default to VisionProvider (OpenRouter)
         try:
             provider = self.vision_provider or get_vision_provider()
             resp = provider.analyze_image_sync(
@@ -93,9 +93,13 @@ class CaptioningTool(BaseTool):
                 "metadata": {
                     "provider": resp.provider,
                     "model": resp.model,
+                    "selected_model": resp.selected_model or resp.model,
+                    "attempted_models": resp.attempted_models or [resp.model],
+                    "fallback_used": resp.fallback_used,
+                    "fallback_reason": resp.fallback_reason,
                     "latency_ms": resp.latency_ms,
                     "mode": "remote",
                 },
             }
         except Exception as e:
-            raise ToolExecutionError(f"Qwen caption execution failed: {e}") from e
+            raise ToolExecutionError(f"Vision caption execution failed: {e}") from e

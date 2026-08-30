@@ -144,15 +144,41 @@ def execute(query: str, rasters: list[RasterInput]) -> dict:
         "tools_run": [o.get("tool") for o in outputs],
     })
 
-    # Step 4 — compose grounded answer
-    answer_parts = [o.get("answer") for o in outputs if o.get("answer")]
-    final_answer = "\n\n".join(answer_parts)
+    # Step 4 — Grounded Synthesis
+    for o in outputs:
+        if "tool" in o and "tool_id" not in o:
+            o["tool_id"] = o["tool"]
+
     confidence = min((o.get("confidence", 0.6) for o in outputs), default=0.6) \
-                 if len(outputs) > 1 else outputs[0].get("confidence", 0.6)
+                 if len(outputs) > 1 else (outputs[0].get("confidence", 0.6) if outputs else 0.6)
+
+    try:
+        from ai.synthesis.llm import LLMSynthesizer
+        synthesizer = LLMSynthesizer()
+        syn_res = synthesizer.synthesize(
+            query=query,
+            tool_results=outputs,
+            confidence=confidence,
+            confidence_status="uncalibrated",
+            intent={"task": plan["primary_task"], "workflow": plan["workflow"]},
+        )
+        final_answer = syn_res.answer
+        syn_source = syn_res.synthesis_source
+        fb_used = syn_res.fallback_used
+        fb_reason = syn_res.fallback_reason
+    except Exception as syn_err:
+        final_answer = "\n\n".join(o.get("answer") for o in outputs if o.get("answer"))
+        syn_source = "raw_tools_fallback"
+        fb_used = True
+        fb_reason = str(syn_err)
 
     trace["steps"].append({
-        "step": 4, "action": "compose_answer",
+        "step": 4,
+        "action": "compose_answer",
         "confidence": round(confidence, 3),
+        "synthesis_source": syn_source,
+        "fallback_used": fb_used,
+        "fallback_reason": fb_reason,
         "total_ms": round((time.time() - t_start) * 1000),
     })
 
@@ -162,6 +188,10 @@ def execute(query: str, rasters: list[RasterInput]) -> dict:
         "outputs": outputs,
         "evidence_images_b64": [o["evidence_image_b64"] for o in outputs
                                 if o.get("evidence_image_b64")],
+        "synthesis_source": syn_source,
+        "fallback_used": fb_used,
+        "fallback_reason": fb_reason,
         "trace": trace,
         "scenario": scenario["scenario"],
     }
+

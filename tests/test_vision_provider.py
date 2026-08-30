@@ -14,8 +14,10 @@ from ai.vision import get_vision_provider
 
 def test_vision_config_defaults_and_masking():
     cfg = VisionConfig(api_key="sk-or-v1-secret12345")
-    assert cfg.provider == "qwen_openrouter"
-    assert cfg.model == "qwen/qwen-2.5-vl-7b-instruct:free"
+    assert cfg.provider == "openrouter"
+    assert cfg.primary_model == "google/gemma-4-26b-a4b-it:free"
+    assert cfg.secondary_model == "google/gemma-4-31b-it:free"
+    assert cfg.tertiary_model == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
     assert "sk-or-v1" not in repr(cfg)
     assert "***" in repr(cfg)
 
