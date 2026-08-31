@@ -8,8 +8,14 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-DEFAULT_LLM_MODEL = "qwen/qwen3-14b:free"
+
+DEFAULT_LLM_MODEL = "minimax/minimax-m3:free"
 DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"
 
 

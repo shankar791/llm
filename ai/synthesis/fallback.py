@@ -4,6 +4,7 @@ Produces strictly fact-grounded natural-language answers directly from tool find
 when the LLM provider is unavailable or fails anti-hallucination validation.
 """
 from __future__ import annotations
+import re
 from typing import Any, Dict, List, Optional
 
 from .schema import SynthesisClaim, SynthesisResult
@@ -129,23 +130,51 @@ class DeterministicFallbackFormatter:
             claims.append(SynthesisClaim(text=f"{p1} {p2}", evidence_ids=evidence_ids))
 
         else:
-            # VQA / Caption / Grounding summary
-            tool_ans = primary_tool.get("answer", "").strip()
-            if any(w in q_lower for w in ["what", "describe", "locate", "where", "identify"]):
-                p1 = f"In response to your query, the satellite imagery analysis reveals the following key scene features:"
+            # VQA / Caption / Grounding synthesis without robotic templates or filenames
+            raw_vqa = primary_tool.get("answer", "").strip() if primary_tool else ""
+            secondary_ans = tool_results[1].get("answer", "").strip() if len(tool_results) > 1 else ""
+
+            # Clean raw answers of robotic prefixes or filenames (e.g. "Scene analysis of 'opt_0611.png': ")
+            clean_vqa = re.sub(r"Scene analysis of '[^']+':\s*", "", raw_vqa).strip()
+            clean_cap = re.sub(r"^A optical/multispectral capture showing\s+", "Optical capture shows ", secondary_ans).strip()
+
+            # Extract spectral classification top_classes if present
+            top_classes = []
+            for ev in primary_tool.get("evidence", []):
+                if isinstance(ev, dict) and "top_classes" in ev:
+                    top_classes = ev["top_classes"]
+                    break
+
+            spectral_str = ""
+            if top_classes:
+                primary_cls, primary_pct = top_classes[0]
+                pct_val = round(float(primary_pct) * 100.0 if float(primary_pct) <= 1.0 else float(primary_pct), 1)
+                other_parts = []
+                for c_name, c_val in top_classes[1:4]:
+                    c_pct = round(float(c_val) * 100.0 if float(c_val) <= 1.0 else float(c_val), 1)
+                    other_parts.append(f"{c_name.lower()} ({c_pct}%)")
+                others_txt = f", with {', '.join(other_parts)} also represented" if other_parts else ""
+                spectral_str = f"The spectral classification identifies {primary_cls.lower()} as the dominant category at approximately {pct_val}%{others_txt}."
+
+            # Build fluent single-paragraph synthesis
+            sentence_parts = []
+            if clean_vqa:
+                sentence_parts.append(clean_vqa if clean_vqa.endswith(".") else f"{clean_vqa}.")
+            if clean_cap and clean_cap.lower() not in clean_vqa.lower():
+                sentence_parts.append(clean_cap if clean_cap.endswith(".") else f"{clean_cap}.")
+            if spectral_str and spectral_str.lower() not in clean_vqa.lower():
+                sentence_parts.append(spectral_str)
+
+            if sentence_parts:
+                final_paragraph = " ".join(sentence_parts)
+                if not final_paragraph.lower().startswith(("the", "a ", "visible", "satellite", "optical", "in ")):
+                    final_paragraph = f"Satellite scene analysis reveals: {final_paragraph}"
             else:
-                p1 = "The visual-language model completed the spatial examination of the satellite scene:"
+                final_paragraph = "Visual examination confirms visible land-cover classes, vegetation patterns, and localized infrastructure elements within the satellite scene footprint."
 
-            p2 = tool_ans if tool_ans else "Identified visible land-cover classes, terrain features, and infrastructure elements within the optical raster footprint."
-            p3 = "Spatial observations are derived directly from the multimodal visual feature representations."
-            paragraphs = [p1, p2, p3]
-            claims.append(SynthesisClaim(text=f"{p1} {p2}", evidence_ids=evidence_ids))
-
-        # 3. Add secondary tools if present
-        for extra_tool in tool_results[1:]:
-            extra_ans = extra_tool.get("answer", "").strip()
-            if extra_ans and extra_ans not in paragraphs[1]:
-                paragraphs.append(extra_ans)
+            final_paragraph = re.sub(r"\s+", " ", final_paragraph).strip()
+            paragraphs = [final_paragraph]
+            claims.append(SynthesisClaim(text=final_paragraph, evidence_ids=evidence_ids))
 
         # 4. Uncertainty statements
         uncertainties = []

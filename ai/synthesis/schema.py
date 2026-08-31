@@ -33,7 +33,7 @@ class SynthesisResult(BaseModel):
     claims: List[SynthesisClaim] = Field(default_factory=list, description="Structured claims with verified evidence links")
     uncertainties: List[str] = Field(default_factory=list, description="Reported uncertainty disclosures")
     justification: str = Field(default="", description="Summary of evidence justification")
-    synthesis_source: Literal["llm", "deterministic_fallback"] = Field(default="llm", description="'llm' or 'deterministic_fallback'")
+    synthesis_source: str = Field(default="llm", description="'minimax', 'llm', or 'deterministic_fallback'")
     fallback_used: bool = Field(default=False, description="Whether deterministic fallback was used")
     fallback_reason: Optional[str] = Field(default=None, description="Reason for fallback if triggered")
     latency_ms: float = Field(default=0.0, description="Synthesis generation latency in milliseconds")

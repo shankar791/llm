@@ -328,13 +328,21 @@ class OpenRouterVisionProvider(VisionProvider):
         *,
         task: TaskType = "vqa",
         temperature: float = 0.0,
-        max_tokens: int = 512,
+        max_tokens: Optional[int] = None,
         **kwargs: Any,
     ) -> VisionResponse:
         """
         Synchronously analyze an image with resilient multi-model routing and fallbacks.
         """
         start_total = time.perf_counter()
+
+        # Determine effective token budget per task
+        if max_tokens is not None:
+            effective_max_tokens = max_tokens
+        elif task == "caption":
+            effective_max_tokens = 768
+        else:
+            effective_max_tokens = 512
 
         # 1. Encode image to data URL and retrieve dimensions
         data_url, (img_w, img_h) = _encode_image_to_data_url(image_input)
@@ -377,8 +385,11 @@ class OpenRouterVisionProvider(VisionProvider):
                     },
                 ],
                 "temperature": temperature,
-                "max_tokens": max_tokens,
+                "max_tokens": effective_max_tokens,
             }
+
+            if task in {"vqa", "caption"}:
+                payload["reasoning"] = {"effort": "low"}
 
             if task == "ground":
                 payload["response_format"] = {"type": "json_object"}
@@ -411,15 +422,40 @@ class OpenRouterVisionProvider(VisionProvider):
                 # Auth error: fail immediately
                 raise
 
-            # 4. Extract generated text
+            # 4. Extract generated text strictly from choices[0].message.content
             try:
-                content_text = raw_resp["choices"][0]["message"]["content"].strip()
-            except (KeyError, IndexError) as e:
+                choice = raw_resp["choices"][0]
+                choice_msg = choice.get("message", {})
+                finish_reason = choice.get("finish_reason")
+                raw_content = choice_msg.get("content") or ""
+                content_text = raw_content.strip()
+            except (KeyError, IndexError, TypeError) as e:
                 last_error = VisionResponseError(
                     f"Malformed response structure from OpenRouter ({current_model}): {raw_resp}",
                     provider=self.config.provider,
                 )
                 fallback_reason = "malformed_response"
+                continue
+
+            # Ensure choices[0].message.content is non-empty; NEVER expose internal reasoning fields as final text
+            if not content_text:
+                if finish_reason == "length":
+                    fallback_reason = "token_limit_exceeded"
+                    last_error = VisionResponseError(
+                        f"Model {current_model} returned empty content with finish_reason='length' (reasoning budget exhausted)",
+                        provider=self.config.provider,
+                        status_code=200,
+                    )
+                else:
+                    fallback_reason = "empty_content"
+                    last_error = VisionResponseError(
+                        f"Model {current_model} returned empty content (finish_reason='{finish_reason}')",
+                        provider=self.config.provider,
+                        status_code=200,
+                    )
+                logger.warning(
+                    f"Model {current_model} returned empty content (finish_reason={finish_reason}). Triggering fallback..."
+                )
                 continue
 
             # 5. Process and validate Grounding if applicable
@@ -466,7 +502,7 @@ class OpenRouterVisionProvider(VisionProvider):
         *,
         task: TaskType = "vqa",
         temperature: float = 0.0,
-        max_tokens: int = 512,
+        max_tokens: Optional[int] = None,
         **kwargs: Any,
     ) -> VisionResponse:
         """

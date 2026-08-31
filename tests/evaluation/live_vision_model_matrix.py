@@ -138,7 +138,8 @@ def run_model_probe(
             },
         ],
         "temperature": 0.0,
-        "max_tokens": 256,
+        "max_tokens": 512,
+        "reasoning": {"effort": "low"},
     }
 
     status, resp_data, lat, err = _execute_http(vqa_payload, api_key)
@@ -146,9 +147,12 @@ def run_model_probe(
     results["vqa"]["latency_ms"] = round(lat, 1)
 
     if status == 200:
-        content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        choice = resp_data.get("choices", [{}])[0]
+        content = choice.get("message", {}).get("content", "").strip()
+        finish_reason = choice.get("finish_reason")
         results["vqa"]["status"] = "PASS" if content else "ERROR"
         results["vqa"]["content"] = content
+        results["vqa"]["finish_reason"] = finish_reason
     elif status == 429:
         err_type, prov_name = _extract_error_metadata(err)
         results["vqa"]["error_type"] = err_type
@@ -190,7 +194,8 @@ def run_model_probe(
             },
         ],
         "temperature": 0.0,
-        "max_tokens": 256,
+        "max_tokens": 768,
+        "reasoning": {"effort": "low"},
     }
 
     status, resp_data, lat, err = _execute_http(cap_payload, api_key)
@@ -198,9 +203,12 @@ def run_model_probe(
     results["caption"]["latency_ms"] = round(lat, 1)
 
     if status == 200:
-        content = resp_data.get("choices", [{}])[0].get("message", {}).get("content", "").strip()
+        choice = resp_data.get("choices", [{}])[0]
+        content = choice.get("message", {}).get("content", "").strip()
+        finish_reason = choice.get("finish_reason")
         results["caption"]["status"] = "PASS" if content else "ERROR"
         results["caption"]["content"] = content
+        results["caption"]["finish_reason"] = finish_reason
     elif status == 429:
         err_type, prov_name = _extract_error_metadata(err)
         results["caption"]["error_type"] = err_type

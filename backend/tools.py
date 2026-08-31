@@ -116,8 +116,28 @@ def tool_vqa(query: str, rasters, scenario: dict) -> dict:
             answer = "The two scenes are spectrally very similar; no major land-cover shift detected."
 
     confidence = float(min(0.95, 0.5 + 0.08 * len(primary)))
-    return {"tool": "T1_VQA", "answer": answer, "evidence": results,
-            "confidence": round(confidence, 3)}
+
+    # Attempt real multimodal VLM analysis if vision provider is available
+    vlm_meta = {}
+    try:
+        from tools.vqa import VQATool
+        vqa_tool = VQATool(mode="real")
+        img_input = rasters[0].thumbnail(768) if hasattr(rasters[0], "thumbnail") else rasters[0]
+        vlm_res = vqa_tool.run(query=query, image_bytes=img_input, mode="real")
+        if vlm_res and vlm_res.get("answer"):
+            answer = vlm_res["answer"]
+            vlm_meta = vlm_res.get("metadata", {})
+    except Exception:
+        pass
+
+    return {
+        "tool": "T1_VQA",
+        "tool_id": "T1_VQA",
+        "answer": answer,
+        "evidence": results,
+        "confidence": round(confidence, 3),
+        "metadata": vlm_meta,
+    }
 
 
 # ---------------------------------------------------------------- T2 captioning
@@ -152,12 +172,27 @@ def tool_caption(raster: RasterInputLike, scenario: dict) -> dict:
     else:
         description = f"A {modality_desc} showing " + ", ".join(phrases) + "."
 
+    # Attempt real multimodal VLM analysis if vision provider is available
+    vlm_meta = {}
+    try:
+        from tools.captioning import CaptioningTool
+        cap_tool = CaptioningTool(mode="real")
+        img_input = raster.thumbnail(768) if hasattr(raster, "thumbnail") else raster
+        vlm_res = cap_tool.run(image_bytes=img_input, mode="real")
+        if vlm_res and vlm_res.get("answer"):
+            description = vlm_res["answer"]
+            vlm_meta = vlm_res.get("metadata", {})
+    except Exception:
+        pass
+
     return {
         "tool": "T2_Caption",
+        "tool_id": "T2_Caption",
         "answer": description,
         "confidence": round(min(0.92, 0.55 + 0.06 * len(phrases)), 3),
         "metrics": {"vegetation": green_frac, "water": water_frac,
                     "built_up": built_frac, "bare": bare_frac},
+        "metadata": vlm_meta,
     }
 
 
@@ -212,9 +247,37 @@ def tool_ground(query: str, raster, scenario: dict) -> dict:
     labels_txt = ", ".join(f"{k}: {vv['count_regions']} region(s), {vv['coverage_pct']}% coverage"
                            for k, vv in found.items())
     answer = f"Grounded regions matching your query — {labels_txt}. Bounding boxes overlaid."
-    return {"tool": "T3_Ground", "answer": answer,
-            "evidence_image_b64": _b64_png(out), "evidence_path": ev_path,
-            "regions": found, "confidence": 0.78}
+
+    # Attempt real multimodal VLM grounding if vision provider is available
+    try:
+        from tools.grounding import GroundingTool
+        gnd_tool = GroundingTool(mode="real")
+        img_input = raster.thumbnail(768) if hasattr(raster, "thumbnail") else raster
+        vlm_res = gnd_tool.run(query=query, image_bytes=img_input, mode="real")
+        if vlm_res and vlm_res.get("evidence"):
+            return {
+                "tool": "T3_Ground",
+                "tool_id": "T3_Ground",
+                "answer": vlm_res.get("answer", answer),
+                "evidence": vlm_res.get("evidence", []),
+                "evidence_image_b64": vlm_res.get("evidence_image_b64") or _b64_png(out),
+                "evidence_path": ev_path,
+                "regions": found,
+                "confidence": vlm_res.get("confidence", 0.78),
+                "metadata": vlm_res.get("metadata", {}),
+            }
+    except Exception:
+        pass
+
+    return {
+        "tool": "T3_Ground",
+        "tool_id": "T3_Ground",
+        "answer": answer,
+        "evidence_image_b64": _b64_png(out),
+        "evidence_path": ev_path,
+        "regions": found,
+        "confidence": 0.78,
+    }
 
 
 def _merge_cells(cells, cw, ch):

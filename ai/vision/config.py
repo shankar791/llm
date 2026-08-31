@@ -10,12 +10,19 @@ from dataclasses import dataclass, field
 import os
 from typing import Dict, List, Optional
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 
 # Canonical OpenRouter Model Slugs
 MODEL_SLUGS: Dict[str, str] = {
     "gemma_26b": "google/gemma-4-26b-a4b-it:free",
     "gemma_31b": "google/gemma-4-31b-it:free",
     "nemotron_nano": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "minimax_m3": "minimax/minimax-m3:free",
     "qwen25_free": "qwen/qwen-2.5-vl-7b-instruct:free",
     "qwen25": "qwen/qwen-2.5-vl-7b-instruct",
     "qwen3": "qwen/qwen3-vl-8b-instruct",
@@ -52,6 +59,9 @@ MODEL_ALIASES: Dict[str, str] = {
     "nemotron": MODEL_SLUGS["nemotron_nano"],
     "nemotron_nano": MODEL_SLUGS["nemotron_nano"],
     "nemotron-3-nano": MODEL_SLUGS["nemotron_nano"],
+    "minimax": MODEL_SLUGS["minimax_m3"],
+    "minimax_m3": MODEL_SLUGS["minimax_m3"],
+    "minimax-m3": MODEL_SLUGS["minimax_m3"],
     "qwen25": MODEL_SLUGS["qwen25_free"],
     "qwen2.5": MODEL_SLUGS["qwen25_free"],
     "qwen2.5-vl": MODEL_SLUGS["qwen25_free"],

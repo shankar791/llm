@@ -350,3 +350,93 @@ def test_live_matrix_probe_account_quota_sets_exhausted_flag(monkeypatch):
     assert res["account_quota_exhausted"] is True
     assert res["overall_status"] == "ACCOUNT_RATE_LIMIT"
 
+
+# ============================================================
+# 7. Reasoning Model Empty Content & Extraction Regression Tests
+# ============================================================
+
+def test_empty_content_with_reasoning_triggers_fallback_without_leaking_reasoning(monkeypatch):
+    """
+    Test that when a reasoning model returns empty choices[0].message.content (finish_reason='length'),
+    the provider does NOT expose message.reasoning as the caption, and instead triggers fallback.
+    """
+    cfg = VisionConfig(api_key="sk-test-key", max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    attempted = []
+
+    def mock_single_request(payload, model_name):
+        attempted.append(model_name)
+        if model_name == cfg.caption_model:
+            # Simulate reasoning model exhausting max_tokens in reasoning phase
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "reasoning": "CONFIDENTIAL_INTERNAL_REASONING_CHAIN: analyzing satellite features...",
+                        },
+                        "finish_reason": "length",
+                    }
+                ]
+            }
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "A high-resolution satellite scene showing port facilities and waterways.",
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    resp = provider.analyze_image_sync(_create_dummy_image(), prompt="Describe satellite scene", task="caption")
+
+    assert resp.selected_model == cfg.secondary_model
+    assert resp.attempted_models == [cfg.caption_model, cfg.secondary_model]
+    assert resp.fallback_used is True
+    assert resp.fallback_reason == "token_limit_exceeded"
+    assert resp.text == "A high-resolution satellite scene showing port facilities and waterways."
+    # Strict check: Never leak reasoning into final text
+    assert "CONFIDENTIAL_INTERNAL_REASONING_CHAIN" not in resp.text
+
+
+def test_successful_caption_extraction_with_stop_finish_reason(monkeypatch):
+    """Test successful caption extraction from message.content when finish_reason is 'stop'."""
+    cfg = VisionConfig(api_key="sk-test-key", max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    captured_payload = None
+
+    def mock_single_request(payload, model_name):
+        nonlocal captured_payload
+        captured_payload = payload
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Coastal agricultural terrain with irrigation canals and road network.",
+                    },
+                    "finish_reason": "stop",
+                }
+            ]
+        }
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    resp = provider.analyze_image_sync(_create_dummy_image(), prompt="Describe satellite scene", task="caption")
+
+    assert resp.selected_model == cfg.caption_model
+    assert resp.fallback_used is False
+    assert resp.text == "Coastal agricultural terrain with irrigation canals and road network."
+    assert captured_payload is not None
+    assert captured_payload["max_tokens"] == 768
+    assert captured_payload["reasoning"] == {"effort": "low"}
+
+

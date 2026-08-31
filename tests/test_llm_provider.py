@@ -29,7 +29,7 @@ from ai.llm.provider import OpenAICompatibleProvider, MockLLMProvider, get_llm_p
 def test_llm_config_defaults():
     cfg = LLMConfig()
     assert cfg.provider == "openai_compatible"
-    assert cfg.model == "qwen/qwen3-14b:free"
+    assert cfg.model == "minimax/minimax-m3:free"
     assert cfg.base_url == "https://openrouter.ai/api/v1"
     assert cfg.timeout == 30.0
     assert cfg.max_retries == 3
@@ -150,13 +150,13 @@ def test_openai_compatible_successful_generation():
     """Test successful completion using httpx mock transport."""
     def mock_handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.read())
-        assert body["model"] == "qwen/qwen3-14b:free"
+        assert body["model"] == "minimax/minimax-m3:free"
         assert body["messages"][0]["content"] == "Classify query"
         assert body["response_format"] == {"type": "json_object"}
 
         response_payload = {
             "id": "chatcmpl-test-123",
-            "model": "qwen/qwen3-14b:free",
+            "model": "minimax/minimax-m3:free",
             "choices": [
                 {
                     "index": 0,

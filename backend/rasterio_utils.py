@@ -285,8 +285,8 @@ def validate_inputs(rasters: list[RasterInput]) -> dict:
         raise ValueError("Maximum 4 images per query.")
 
     formats = {r.metadata["format"] for r in rasters}
-    if not formats <= {"tif", "tiff", "png", "jpg", "jpeg"}:
-        raise ValueError(f"Unsupported format(s): {formats}. Use GeoTIFF/TIFF/PNG/JPEG.")
+    if not formats <= {"tif", "tiff", "png", "jpg", "jpeg", "webp", "bmp"}:
+        raise ValueError(f"Unsupported format(s): {formats}. Use GeoTIFF/TIFF/PNG/JPEG/WEBP.")
 
     modalities = [r.modality for r in rasters]
     sizes = [(r.metadata["height"], r.metadata["width"]) for r in rasters]

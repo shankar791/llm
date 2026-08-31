@@ -20,9 +20,24 @@ class LLMResponse:
 
     def json(self) -> Dict[str, Any]:
         """Parse text content as a structured JSON object."""
+        text = self.content.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
         try:
-            return json.loads(self.content)
+            return json.loads(text)
         except json.JSONDecodeError as e:
+            start = text.find("{")
+            end = text.rfind("}")
+            if start != -1 and end > start:
+                try:
+                    return json.loads(text[start : end + 1])
+                except json.JSONDecodeError:
+                    pass
             raise ValueError(f"LLM output is not valid JSON: {e}\nRaw output: {self.content}") from e
 
 

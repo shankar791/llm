@@ -355,3 +355,76 @@ def test_fusion_fallback_analytical_quality():
     assert "13.5%" in res.answer
     assert "SAR backscatter" in res.answer or "SAR texture" in res.answer
 
+
+def test_step17_minimax_rich_vision_synthesis_quality():
+    """Verify that MiniMax synthesis transforms rich multimodal evidence into a grounded 80–150 word paragraph."""
+    tool_results = [
+        {
+            "tool_id": "T1_VQA",
+            "answer": "Visible features include a winding river basin in the northern sector, dense urban residential blocks in the south-west, and cultivated arable land across the central and eastern sectors.",
+            "evidence": [
+                {
+                    "top_classes": [
+                        ("Arable land", 0.404),
+                        ("Broad-leaved forest", 0.1395),
+                        ("Industrial or commercial units", 0.1157),
+                        ("Inland waters", 0.0765),
+                    ]
+                }
+            ],
+            "confidence": 0.82,
+            "metadata": {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"},
+        },
+        {
+            "tool_id": "T2_Caption",
+            "answer": "A high-resolution optical satellite scene displaying mixed terrain: the northern sector is bisected by a dark winding river, with dense built-up residential and commercial structures dominating the lower quadrant and extensive agricultural fields in the east.",
+            "evidence": [],
+            "confidence": 0.85,
+            "metadata": {"model": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"},
+        },
+    ]
+
+    mock_payload = {
+        "answer": (
+            "The satellite scene depicts a heterogeneous landscape organized around a prominent winding river basin in the northern sector. "
+            "Dense urban residential and commercial structures dominate the southern and southwestern quadrants, while extensive cultivated arable "
+            "land spans across the central and eastern sectors. Vegetated woodland and broad-leaved forest patches are distributed adjacent to these "
+            "agricultural zones, creating a distinct transition between built-up and rural environments. According to the spectral classification, "
+            "arable land is identified as the largest category at approximately 40.4%, with broad-leaved forest at 13.95%, industrial or commercial "
+            "units at 11.57%, and inland waters at 7.65%. Overall, the spatial organization demonstrates a clear progression from natural waterways in "
+            "the north to dense human settlements in the south and agricultural expanses in the east."
+        ),
+        "claims": [
+            {"text": "Winding river basin in northern sector", "evidence_ids": ["E4"]},
+            {"text": "Dense urban structures in southwest", "evidence_ids": ["E3"]},
+            {"text": "Arable land largest category at ~40.4%", "evidence_ids": ["E1"]},
+            {"text": "Broad-leaved forest at 13.95%", "evidence_ids": ["E2"]},
+        ],
+        "uncertainties": ["Model confidence is uncalibrated."],
+        "justification": "Synthesized from visual observations and verified spectral classification scores without inventing unseen features.",
+    }
+
+    mock_p = MockLLMProvider(default_response=json.dumps(mock_payload))
+    synthesizer = LLMSynthesizer(provider=mock_p)
+
+    res = synthesizer.synthesize(
+        query="Describe this satellite scene and explain the dominant land-cover patterns, major structures, and spatial organization.",
+        tool_results=tool_results,
+        confidence=0.82,
+        confidence_status="uncalibrated",
+        intent={"task": "caption", "workflow": ["T1_VQA", "T2_Caption"]},
+    )
+
+    assert res.synthesis_source == "llm"
+    assert res.fallback_used is False
+    assert res.fallback_reason is None
+    words = res.answer.split()
+    assert 80 <= len(words) <= 150
+    paragraphs = [p for p in res.answer.split("\n\n") if p.strip()]
+    assert len(paragraphs) == 1
+    assert "40.4%" in res.answer
+    assert "winding river" in res.answer.lower() or "river" in res.answer.lower()
+    assert "urban" in res.answer.lower() or "residential" in res.answer.lower()
+    assert "arable" in res.answer.lower()
+
+
