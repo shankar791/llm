@@ -86,19 +86,10 @@ class GroundingTool(BaseTool):
             adapter = self._get_geochat_adapter(mode="mock")
             return adapter.ground(image=img_input, target_query=query, mode="mock")
 
-        # 2. Real execution mode
-        provider_name = os.environ.get("VISION_PROVIDER", "qwen_openrouter").lower()
-
-        if provider_name == "geochat":
-            try:
-                adapter = self._get_geochat_adapter(mode="real")
-                return adapter.ground(image=img_input, target_query=query, mode="real")
-            except Exception as e:
-                raise ToolExecutionError(f"GeoChat grounding execution failed: {e}") from e
-
-        # Default to VisionProvider (OpenRouter)
+        # 2. Real execution mode: Keep existing T3_Ground implementation (Step 6)
         try:
-            provider = self.vision_provider or get_vision_provider()
+            from ai.vision.openrouter_qwen import OpenRouterVisionProvider
+            provider = self.vision_provider or OpenRouterVisionProvider()
             resp = provider.analyze_image_sync(
                 image_input=img_input,
                 prompt=query,

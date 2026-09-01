@@ -108,6 +108,8 @@ class VisionConfig:
     ground_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_GROUND_FALLBACKS)
     base_url: str = "https://openrouter.ai/api/v1"
     api_key: Optional[str] = None
+    geochat_base_url: str = "http://172.25.166.59:8000"
+    geochat_api_key: Optional[str] = None
     timeout: float = 45.0
     max_retries: int = 2
 
@@ -173,6 +175,9 @@ class VisionConfig:
         except ValueError:
             max_retries = 2
 
+        geochat_base_url = os.environ.get("GEOCHAT_BASE_URL", "http://172.25.166.59:8000")
+        geochat_api_key = os.environ.get("GEOCHAT_API_KEY")
+
         return cls(
             provider=provider,
             primary_model=primary_model,
@@ -187,6 +192,8 @@ class VisionConfig:
             ground_fallbacks=ground_fallbacks,
             base_url=base_url,
             api_key=api_key,
+            geochat_base_url=geochat_base_url,
+            geochat_api_key=geochat_api_key,
             timeout=timeout,
             max_retries=max_retries,
         )
@@ -226,11 +233,13 @@ class VisionConfig:
 
     def __repr__(self) -> str:
         masked = "***" if self.api_key else "None"
+        masked_gc = "***" if self.geochat_api_key else "None"
         return (
             f"VisionConfig(provider='{self.provider}', primary_model='{self.primary_model}', "
             f"secondary_model='{self.secondary_model}', tertiary_model='{self.tertiary_model}', "
             f"vqa_model='{self.vqa_model}', ground_model='{self.ground_model}', "
             f"base_url='{self.base_url}', api_key={masked}, "
+            f"geochat_base_url='{self.geochat_base_url}', geochat_api_key={masked_gc}, "
             f"timeout={self.timeout}, max_retries={self.max_retries})"
         )
 

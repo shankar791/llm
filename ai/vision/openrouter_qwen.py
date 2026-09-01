@@ -410,13 +410,13 @@ class OpenRouterVisionProvider(VisionProvider):
                 logger.warning(f"Model {current_model} hit network/timeout error. Attempting fallback...")
                 continue
             except VisionResponseError as e:
-                if e.status_code and e.status_code in {500, 502, 503, 504}:
+                if e.status_code and e.status_code in {400, 404, 429, 500, 502, 503, 504}:
                     last_error = e
-                    fallback_reason = "upstream_server_error"
+                    fallback_reason = f"upstream_error_{e.status_code}"
                     logger.warning(f"Model {current_model} returned {e.status_code}. Attempting fallback...")
                     continue
                 else:
-                    # Non-transient 4xx error (e.g. 400 bad request)
+                    # Non-transient error
                     raise
             except VisionAuthenticationError:
                 # Auth error: fail immediately

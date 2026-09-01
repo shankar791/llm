@@ -266,20 +266,20 @@ def execute_specialist_tool_node(state: AgentState) -> dict:
 
     try:
         tool_instance = ToolRegistry.instantiate(selected_tool)
+        mode = state.get("metadata", {}).get("mode", "mock")
         if selected_tool == "T1_VQA":
-            res = tool_instance.run(query=query, image_bytes=images, modalities=modalities)
+            res = tool_instance.run(query=query, image_bytes=images, modalities=modalities, mode=mode)
         elif selected_tool == "T2_Caption":
             img = images[0] if images else b""
             mod = modalities[0] if modalities else "optical"
-            res = tool_instance.run(image_bytes=img, modality=mod)
+            res = tool_instance.run(image_bytes=img, modality=mod, mode=mode)
         elif selected_tool == "T3_Ground":
             img = images[0] if images else b""
             mod = modalities[0] if modalities else "optical"
-            res = tool_instance.run(query=query, image_bytes=img, modality=mod)
+            res = tool_instance.run(query=query, image_bytes=img, modality=mod, mode=mode)
         elif selected_tool == "T4_Change":
             img_t0 = images[0] if len(images) > 0 else b""
             img_t1 = images[1] if len(images) > 1 else b""
-            mode = state.get("metadata", {}).get("mode", "mock")
             res = tool_instance.run(image_bytes_t0=img_t0, image_bytes_t1=img_t1, mode=mode)
         elif selected_tool == "T5_OpticalSAR":
             img_opt = images[0] if len(images) > 0 else b""

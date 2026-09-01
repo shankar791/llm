@@ -149,8 +149,8 @@ def execute(query: str, rasters: list[RasterInput]) -> dict:
         if "tool" in o and "tool_id" not in o:
             o["tool_id"] = o["tool"]
 
-    confidence = min((o.get("confidence", 0.6) for o in outputs), default=0.6) \
-                 if len(outputs) > 1 else (outputs[0].get("confidence", 0.6) if outputs else 0.6)
+    valid_confs = [o["confidence"] for o in outputs if o.get("confidence") is not None]
+    confidence = min(valid_confs) if valid_confs else 0.6
 
     try:
         from ai.synthesis.llm import LLMSynthesizer

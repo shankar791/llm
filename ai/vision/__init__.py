@@ -30,6 +30,7 @@ from .errors import (
 )
 from .mock import MockVisionProvider
 from .openrouter_qwen import OpenRouterVisionProvider, OpenRouterQwenVisionProvider
+from .geochat import GeoChatVisionProvider
 
 
 def get_vision_provider(config: Optional[VisionConfig] = None) -> VisionProvider:
@@ -42,6 +43,8 @@ def get_vision_provider(config: Optional[VisionConfig] = None) -> VisionProvider
 
     if provider_key in {"mock", "test"}:
         return MockVisionProvider()
+    elif provider_key in {"geochat", "geochat_api", "geochat_service"}:
+        return GeoChatVisionProvider(config=cfg)
     elif provider_key in {"openrouter", "qwen_openrouter", "openrouter_qwen", "qwen"}:
         return OpenRouterVisionProvider(config=cfg)
     else:
@@ -57,6 +60,7 @@ __all__ = [
     "VisionResponse",
     "VisionConfig",
     "get_vision_provider",
+    "GeoChatVisionProvider",
     "OpenRouterVisionProvider",
     "OpenRouterQwenVisionProvider",
     "MockVisionProvider",
