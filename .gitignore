@@ -66,6 +66,7 @@ yarn-error.log*
 .pnpm-debug.log*
 frontend/dist/
 frontend/build/
+frontend-merged-backup/
 
 # OS Specific
 .DS_Store

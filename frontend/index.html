@@ -3,10 +3,9 @@
 <head>
     <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover' />
     <meta charset='utf-8'>
-    <link rel="stylesheet" type="text/css" href="styles.css">
+    <link rel="stylesheet" type="text/css" href="styles.css?v=5">
     <link rel="manifest" href="manifest.json">
-    <style></style>
-    <title>SATQUERY-AI</title>
+    <title>SATQUERY AI</title>
     <script src="gsap.min.js"></script>
     <script src="playcanvas-stable.min.js"></script>
     <script src="__settings__.js"></script>
@@ -15,5 +14,71 @@
     <script src="__modules__.js"></script>
     <script src="__start__.js"></script>
     <script src="__loading__.js"></script>
+
+    <!-- Fast Auto-Redirect Controller on Scroll Endpoint -->
+    <script>
+        (function() {
+            var hasRedirected = false;
+            var experienceStarted = false;
+            var userHasInteracted = false;
+
+            // Mark when user clicks 'INITIATE SYSTEM'
+            window.addEventListener('experienceStart', function() {
+                setTimeout(function() {
+                    experienceStarted = true;
+                }, 800);
+            });
+
+            // Track active user scroll interaction
+            window.addEventListener('wheel', function(e) {
+                if (experienceStarted && e.deltaY > 0) userHasInteracted = true;
+            }, { passive: true });
+            window.addEventListener('touchmove', function() {
+                if (experienceStarted) userHasInteracted = true;
+            }, { passive: true });
+            window.addEventListener('keydown', function(e) {
+                if (experienceStarted && (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ')) {
+                    userHasInteracted = true;
+                }
+            });
+
+            function doFastRedirect() {
+                if (hasRedirected) return;
+                hasRedirected = true;
+
+                // 200ms atmospheric dive warp flash
+                var flash = document.createElement('div');
+                flash.style.cssText = 'position:fixed; inset:0; background:#d4d4d8; z-index:2147483647; opacity:0; pointer-events:all; transition:opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);';
+                document.body.appendChild(flash);
+
+                requestAnimationFrame(function() {
+                    flash.style.opacity = '1';
+                    setTimeout(function() {
+                        window.location.href = '/app/?mission=started';
+                    }, 200);
+                });
+            }
+
+            var checkEventBus = setInterval(function() {
+                if (window.EventBus && window.EventBus.on) {
+                    clearInterval(checkEventBus);
+                    window.EventBus.on('scroll:progress', function(p) {
+                        // STRICT GUARDS:
+                        // 1. Ignore shader warmup / preloading
+                        // 2. Must be active after user clicked INITIATE SYSTEM
+                        // 3. Must be driven by user scrolling
+                        if (!experienceStarted || !userHasInteracted || window.__sceneWarmup) {
+                            return;
+                        }
+
+                        // Trigger auto-redirect only when user genuinely reaches the 10.66% satellite endpoint
+                        if (p >= 0.1055) {
+                            doFastRedirect();
+                        }
+                    });
+                }
+            }, 30);
+        })();
+    </script>
 </body>
 </html>
