@@ -117,7 +117,7 @@ class VisionConfig:
     ground_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_GROUND_FALLBACKS)
     base_url: str = "https://openrouter.ai/api/v1"
     api_key: Optional[str] = None
-    geochat_base_url: str = "http://172.25.166.59:8000"
+    geochat_base_url: str = "http://172.25.32.36:8000"
     geochat_api_key: Optional[str] = None
     timeout: float = 45.0
     max_retries: int = 2
@@ -184,7 +184,7 @@ class VisionConfig:
         except ValueError:
             max_retries = 2
 
-        geochat_base_url = os.environ.get("GEOCHAT_BASE_URL", "http://172.25.166.59:8000")
+        geochat_base_url = os.environ.get("GEOCHAT_BASE_URL", "http://172.25.32.36:8000")
         geochat_api_key = os.environ.get("GEOCHAT_API_KEY")
 
         return cls(

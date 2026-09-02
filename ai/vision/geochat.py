@@ -81,7 +81,7 @@ class GeoChatVisionProvider:
         self.base_url = (
             base_url
             or getattr(self.config, "geochat_base_url", None)
-            or os.environ.get("GEOCHAT_BASE_URL", "http://172.25.166.59:8000")
+            or os.environ.get("GEOCHAT_BASE_URL", "http://172.25.32.36:8000")
         ).rstrip("/")
         self.api_key = (
             api_key
