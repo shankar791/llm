@@ -1,9 +1,11 @@
 """
 Configuration management for the SatQuery AI Vision subsystem.
-Supports multi-model routing and fallbacks across OpenRouter vision models:
-- Primary: google/gemma-4-26b-a4b-it:free
-- Secondary: google/gemma-4-31b-it:free
-- Tertiary: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+Supports multi-model routing and automatic sequential fallback across OpenRouter free vision models:
+1. MODEL_1: google/gemma-4-26b-a4b-it:free
+2. MODEL_2: google/gemma-4-31b-it:free
+3. MODEL_3: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
+4. MODEL_4: minimax/minimax-m3:free
+5. MODEL_5: thinkingmachines/inkling:free
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
@@ -11,8 +13,13 @@ import os
 from typing import Dict, List, Optional
 
 try:
+    from pathlib import Path
     from dotenv import load_dotenv
-    load_dotenv()
+    _env_file = Path(__file__).resolve().parent.parent.parent / ".env"
+    if _env_file.exists():
+        load_dotenv(_env_file, override=True)
+    else:
+        load_dotenv(override=True)
 except ImportError:
     pass
 
@@ -33,23 +40,65 @@ MODEL_SLUGS: Dict[str, str] = {
     "qwen3_235b": "qwen/qwen3-vl-235b-a22b-instruct",
 }
 
-# Default Vision Models
-DEFAULT_VISION_PRIMARY_MODEL = MODEL_SLUGS["gemma_26b"]
-DEFAULT_VISION_SECONDARY_MODEL = MODEL_SLUGS["gemma_31b"]
-DEFAULT_VISION_TERTIARY_MODEL = MODEL_SLUGS["nemotron_nano"]
+# Default Vision Models (in exact sequential fallback order)
+MODEL_1 = MODEL_SLUGS["gemma_26b"]        # "google/gemma-4-26b-a4b-it:free"
+MODEL_2 = MODEL_SLUGS["gemma_31b"]        # "google/gemma-4-31b-it:free"
+MODEL_3 = MODEL_SLUGS["nemotron_nano"]     # "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+MODEL_4 = MODEL_SLUGS["minimax_m3"]       # "minimax/minimax-m3:free"
+MODEL_5 = MODEL_SLUGS["inkling"]          # "thinkingmachines/inkling:free"
+
+DEFAULT_VISION_PRIMARY_MODEL = MODEL_1
+DEFAULT_VISION_SECONDARY_MODEL = MODEL_2
+DEFAULT_VISION_TERTIARY_MODEL = MODEL_3
+DEFAULT_VISION_QUATERNARY_MODEL = MODEL_4
+DEFAULT_VISION_QUINARY_MODEL = MODEL_5
+
+# Exact 5-Model Fallback Sequence
+DEFAULT_VISION_FALLBACK_MODELS: List[str] = [
+    MODEL_1,
+    MODEL_2,
+    MODEL_3,
+    MODEL_4,
+    MODEL_5,
+]
 
 # Default Task Models & Fallback Lists
 DEFAULT_VISION_VQA_MODEL = DEFAULT_VISION_PRIMARY_MODEL
-DEFAULT_VISION_VQA_FALLBACKS = [DEFAULT_VISION_SECONDARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+DEFAULT_VISION_VQA_FALLBACKS = [
+    DEFAULT_VISION_SECONDARY_MODEL,
+    DEFAULT_VISION_TERTIARY_MODEL,
+    DEFAULT_VISION_QUATERNARY_MODEL,
+    DEFAULT_VISION_QUINARY_MODEL,
+]
 
 DEFAULT_VISION_CAPTION_MODEL = DEFAULT_VISION_PRIMARY_MODEL
-DEFAULT_VISION_CAPTION_FALLBACKS = [DEFAULT_VISION_SECONDARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+DEFAULT_VISION_CAPTION_FALLBACKS = [
+    DEFAULT_VISION_SECONDARY_MODEL,
+    DEFAULT_VISION_TERTIARY_MODEL,
+    DEFAULT_VISION_QUATERNARY_MODEL,
+    DEFAULT_VISION_QUINARY_MODEL,
+]
 
 DEFAULT_VISION_GROUND_MODEL = DEFAULT_VISION_SECONDARY_MODEL
-DEFAULT_VISION_GROUND_FALLBACKS = [DEFAULT_VISION_PRIMARY_MODEL, DEFAULT_VISION_TERTIARY_MODEL]
+DEFAULT_VISION_GROUND_FALLBACKS = [
+    DEFAULT_VISION_PRIMARY_MODEL,
+    DEFAULT_VISION_TERTIARY_MODEL,
+    DEFAULT_VISION_QUATERNARY_MODEL,
+    DEFAULT_VISION_QUINARY_MODEL,
+]
 
 # User-friendly short aliases
 MODEL_ALIASES: Dict[str, str] = {
+    "model_1": MODEL_1,
+    "model_2": MODEL_2,
+    "model_3": MODEL_3,
+    "model_4": MODEL_4,
+    "model_5": MODEL_5,
+    "model1": MODEL_1,
+    "model2": MODEL_2,
+    "model3": MODEL_3,
+    "model4": MODEL_4,
+    "model5": MODEL_5,
     "gemma_26b": MODEL_SLUGS["gemma_26b"],
     "gemma-26b": MODEL_SLUGS["gemma_26b"],
     "gemma-4-26b": MODEL_SLUGS["gemma_26b"],
@@ -108,6 +157,9 @@ class VisionConfig:
     primary_model: str = DEFAULT_VISION_PRIMARY_MODEL
     secondary_model: str = DEFAULT_VISION_SECONDARY_MODEL
     tertiary_model: str = DEFAULT_VISION_TERTIARY_MODEL
+    quaternary_model: str = DEFAULT_VISION_QUATERNARY_MODEL
+    quinary_model: str = DEFAULT_VISION_QUINARY_MODEL
+    fallback_models: tuple[str, ...] = tuple(DEFAULT_VISION_FALLBACK_MODELS)
     model: str = DEFAULT_VISION_PRIMARY_MODEL
     vqa_model: str = DEFAULT_VISION_VQA_MODEL
     vqa_fallbacks: tuple[str, ...] = tuple(DEFAULT_VISION_VQA_FALLBACKS)
@@ -138,14 +190,25 @@ class VisionConfig:
         """Load vision configuration from environment variables."""
         provider = os.environ.get("VISION_PROVIDER", "openrouter").lower()
         
-        raw_primary = os.environ.get("VISION_MODEL") or os.environ.get("VISION_PRIMARY_MODEL")
+        raw_primary = os.environ.get("VISION_MODEL") or os.environ.get("VISION_PRIMARY_MODEL") or os.environ.get("VISION_MODEL_1")
         primary_model = resolve_model_slug(raw_primary, default=DEFAULT_VISION_PRIMARY_MODEL)
 
-        raw_secondary = os.environ.get("VISION_SECONDARY_MODEL")
+        raw_secondary = os.environ.get("VISION_SECONDARY_MODEL") or os.environ.get("VISION_MODEL_2")
         secondary_model = resolve_model_slug(raw_secondary, default=DEFAULT_VISION_SECONDARY_MODEL)
 
-        raw_tertiary = os.environ.get("VISION_TERTIARY_MODEL")
+        raw_tertiary = os.environ.get("VISION_TERTIARY_MODEL") or os.environ.get("VISION_MODEL_3")
         tertiary_model = resolve_model_slug(raw_tertiary, default=DEFAULT_VISION_TERTIARY_MODEL)
+
+        raw_quaternary = os.environ.get("VISION_QUATERNARY_MODEL") or os.environ.get("VISION_MODEL_4")
+        quaternary_model = resolve_model_slug(raw_quaternary, default=DEFAULT_VISION_QUATERNARY_MODEL)
+
+        raw_quinary = os.environ.get("VISION_QUINARY_MODEL") or os.environ.get("VISION_MODEL_5")
+        quinary_model = resolve_model_slug(raw_quinary, default=DEFAULT_VISION_QUINARY_MODEL)
+
+        # Fallback sequence
+        raw_fb_models = os.environ.get("VISION_FALLBACK_MODELS")
+        default_fb_list = [primary_model, secondary_model, tertiary_model, quaternary_model, quinary_model]
+        fallback_models = tuple(parse_model_list(raw_fb_models, default_fb_list))
 
         # Task-specific Primary Models
         raw_vqa = os.environ.get("VISION_VQA_MODEL")
@@ -159,13 +222,16 @@ class VisionConfig:
 
         # Task-specific Fallbacks
         raw_vqa_fb = os.environ.get("VISION_VQA_FALLBACKS")
-        vqa_fallbacks = tuple(parse_model_list(raw_vqa_fb, [secondary_model, tertiary_model]))
+        default_vqa_fbs = [m for m in fallback_models if m != vqa_model]
+        vqa_fallbacks = tuple(parse_model_list(raw_vqa_fb, default_vqa_fbs))
 
         raw_cap_fb = os.environ.get("VISION_CAPTION_FALLBACKS")
-        caption_fallbacks = tuple(parse_model_list(raw_cap_fb, [secondary_model, tertiary_model]))
+        default_cap_fbs = [m for m in fallback_models if m != caption_model]
+        caption_fallbacks = tuple(parse_model_list(raw_cap_fb, default_cap_fbs))
 
         raw_grd_fb = os.environ.get("VISION_GROUND_FALLBACKS")
-        ground_fallbacks = tuple(parse_model_list(raw_grd_fb, [primary_model, tertiary_model]))
+        default_grd_fbs = [primary_model, tertiary_model, quaternary_model, quinary_model]
+        ground_fallbacks = tuple(parse_model_list(raw_grd_fb, default_grd_fbs))
 
         base_url = os.environ.get("VISION_BASE_URL", os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"))
         
@@ -192,6 +258,9 @@ class VisionConfig:
             primary_model=primary_model,
             secondary_model=secondary_model,
             tertiary_model=tertiary_model,
+            quaternary_model=quaternary_model,
+            quinary_model=quinary_model,
+            fallback_models=fallback_models,
             model=primary_model,
             vqa_model=vqa_model,
             vqa_fallbacks=vqa_fallbacks,
@@ -229,7 +298,7 @@ class VisionConfig:
         elif task == "ground":
             candidates = [self.ground_model] + list(self.ground_fallbacks)
         else:
-            candidates = [self.model, self.secondary_model, self.tertiary_model]
+            candidates = list(self.fallback_models) if self.fallback_models else [self.model, self.secondary_model, self.tertiary_model, self.quaternary_model, self.quinary_model]
 
         # Deduplicate preserving order
         seen = set()
@@ -246,6 +315,7 @@ class VisionConfig:
         return (
             f"VisionConfig(provider='{self.provider}', primary_model='{self.primary_model}', "
             f"secondary_model='{self.secondary_model}', tertiary_model='{self.tertiary_model}', "
+            f"quaternary_model='{self.quaternary_model}', quinary_model='{self.quinary_model}', "
             f"vqa_model='{self.vqa_model}', ground_model='{self.ground_model}', "
             f"base_url='{self.base_url}', api_key={masked}, "
             f"geochat_base_url='{self.geochat_base_url}', geochat_api_key={masked_gc}, "

@@ -16,6 +16,7 @@ from .schema import (
 from .validator import SynthesisValidator
 from .fallback import DeterministicFallbackFormatter
 from .llm import LLMSynthesizer
+from .formatter import format_vlm_presentation
 
 __all__ = [
     "LLMSynthesizer",
@@ -25,4 +26,5 @@ __all__ = [
     "PostValidationResult",
     "SynthesisValidator",
     "DeterministicFallbackFormatter",
+    "format_vlm_presentation",
 ]

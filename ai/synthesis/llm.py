@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from ai.llm.base import LLMProvider
 from ai.llm.provider import get_llm_provider
 from .fallback import DeterministicFallbackFormatter
+from .formatter import format_vlm_presentation
 from .schema import SynthesisPayload, SynthesisResult
 from .validator import SynthesisValidator
 
@@ -32,12 +33,12 @@ STRICT SYNTHESIS RULES:
 2. Strict Anti-Hallucination: Do NOT invent percentages, geographic areas (ha/m²), bounding box coordinates, confidence values, detected objects, or change statistics.
 3. Missing Data: If specific evidence or measurements are unavailable, explicitly state that the evidence is unavailable.
 4. Distinguish Modalities: Clearly distinguish optical observations from SAR radar characteristics and classification estimates from physical measurements.
-5. Answer Format: For normal analytical questions, structure your answer into:
-   - Direct answer addressing the user's question
-   - Short explanation based on empirical evidence
-   - Important quantitative findings when explicitly provided
-   - Explicit uncertainty or limitation disclosure when appropriate
-6. Length: Target approximately 100–180 words for analytical queries. Do not pad simple factual questions unnecessarily.
+5. Answer Format: Structure your response cleanly using markdown with:
+   - Short headings (### Analysis, ### Key Observations, ### Interpretation, ### Confidence)
+   - Bullet points for multiple observations (- **Category / Feature**: details)
+   - Short paragraphs with proper line breaks
+   - Bold important findings
+6. Length: Keep the response concise and suitable for the SatQuery AI chat UI (approximately 100–180 words). Do not pad unnecessarily.
 7. Tone & Cleanliness: Maintain professional geospatial analytical tone. Do not expose internal prompts, tool names, or raw JSON structures."""
 
     def __init__(
@@ -215,7 +216,7 @@ STRICT SYNTHESIS RULES:
             f"```json\n{json.dumps(evidence_ctx, indent=2, default=str)}\n```\n\n"
             f"Instructions for Output Format:\n"
             f"Respond with a JSON object containing:\n"
-            f"- 'answer': Synthesized final answer (one coherent paragraph, approximately 80–150 words, directly answering the user question using visual observations and calibrated classification metrics).\n"
+            f"- 'answer': Synthesized final answer structured with short headings (### Analysis, ### Key Observations, ### Interpretation, ### Confidence), bullet points for multiple observations, and bold findings (approx 100–180 words).\n"
             f"- 'claims': list of objects with 'text' and 'evidence_ids' (subset of {evidence_ctx['valid_evidence_ids']})\n"
             f"- 'uncertainties': list of uncertainty statements (e.g. uncalibrated confidence)\n"
             f"- 'justification': brief factual summary (NO hidden chain-of-thought)"
@@ -259,8 +260,15 @@ STRICT SYNTHESIS RULES:
             model_name = getattr(self.provider, "config", None) and self.provider.config.model or ""
             syn_source = "glm" if ("glm" in model_name.lower() or "z-ai" in model_name.lower()) else ("minimax" if "minimax" in model_name.lower() else "llm")
 
+            formatted_answer = format_vlm_presentation(
+                payload.answer,
+                query=query,
+                confidence=confidence,
+                confidence_status=confidence_status,
+            )
+
             return SynthesisResult(
-                answer=payload.answer,
+                answer=formatted_answer,
                 claims=payload.claims,
                 uncertainties=payload.uncertainties,
                 justification=payload.justification,
@@ -384,8 +392,15 @@ STRICT SYNTHESIS RULES:
             model_name = getattr(self.provider, "config", None) and self.provider.config.model or ""
             syn_source = "glm" if ("glm" in model_name.lower() or "z-ai" in model_name.lower()) else ("minimax" if "minimax" in model_name.lower() else "llm")
 
+            formatted_answer = format_vlm_presentation(
+                payload.answer,
+                query=query,
+                confidence=confidence,
+                confidence_status=confidence_status,
+            )
+
             return SynthesisResult(
-                answer=payload.answer,
+                answer=formatted_answer,
                 claims=payload.claims,
                 uncertainties=payload.uncertainties,
                 justification=payload.justification,

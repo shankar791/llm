@@ -62,48 +62,66 @@ class DeterministicFallbackFormatter:
             ev_list = existing_evidence or []
 
             matched_items = []
+            is_veg_query = any(w in q_lower for w in ["vegetation", "forest", "flora", "green", "crop", "tree", "plant"])
+            is_bldg_query = any(w in q_lower for w in ["urban", "building", "structure", "built-up", "city", "house", "facility", "infrastructure"])
+            is_water_query = any(w in q_lower for w in ["water", "flood", "lake", "river", "ocean", "sea", "canal"])
+
             for ev in ev_list:
                 lbl = str(ev.get("label", "")).lower()
                 fnd = str(ev.get("finding", "")).lower()
-                if any(w in q_lower for w in ["vegetation", "forest", "flora", "green"]):
-                    if any(k in lbl or k in fnd for k in ["forest", "vegetat", "pasture", "arable", "green"]):
+                if is_veg_query:
+                    if any(k in lbl or k in fnd for k in ["forest", "vegetat", "pasture", "arable", "green", "crop", "grass", "tree", "flora"]):
                         matched_items.append(ev)
-                elif any(w in q_lower for w in ["urban", "building", "structure", "built-up", "city"]):
-                    if any(k in lbl or k in fnd for k in ["urban", "building", "industrial", "commercial", "structure", "fabric"]):
+                elif is_bldg_query:
+                    if any(k in lbl or k in fnd for k in ["urban", "building", "industrial", "commercial", "structure", "fabric", "residential", "bridge", "overpass", "facility"]):
                         matched_items.append(ev)
-                elif any(w in q_lower for w in ["water", "flood", "lake", "river"]):
-                    if any(k in lbl or k in fnd for k in ["water", "marine", "inland", "flood"]):
+                elif is_water_query:
+                    if any(k in lbl or k in fnd for k in ["water", "marine", "inland", "flood", "lake", "river", "ocean", "canal"]):
                         matched_items.append(ev)
 
-            if not matched_items:
-                matched_items = ev_list
-
-            ev_ids = [item.get("evidence_id") for item in matched_items if item.get("evidence_id")] or ["E1"]
-            descriptions = []
-            for item in matched_items:
-                eid = item.get("evidence_id", "E1")
-                lbl = item.get("label", "feature")
-                pct = item.get("coverage_pct")
-                if pct:
-                    descriptions.append(f"{lbl} (approximately {pct}%, {eid})")
-                elif item.get("finding"):
-                    descriptions.append(f"{item.get('finding')} ({eid})")
-                else:
-                    descriptions.append(f"{lbl} ({eid})")
-
-            desc_str = ", ".join(descriptions)
-            if "why" in q_lower or "think that" in q_lower:
-                answer = f"This assessment is grounded directly in the verified empirical evidence from the scene analysis: {desc_str}."
-                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
-            elif any(w in q_lower for w in ["vegetation", "forest"]):
-                answer = f"Vegetation observations in this scene are concentrated in: {desc_str} based on verified spectral analysis."
-                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
-            elif any(w in q_lower for w in ["urban", "building"]):
-                answer = f"Built-up and structural features are identified as: {desc_str} based on spatial and spectral signatures."
-                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+            # Strict anti-hallucination: explicitly state if evidence is absent for the queried feature
+            if is_bldg_query and not matched_items:
+                answer = "The available analysis does not contain enough evidence or detections of buildings or structural features in this scene."
+                justification = "No structural or building evidence items found in existing session context."
+                ev_ids = []
+            elif is_veg_query and not matched_items:
+                answer = "The available analysis does not contain enough evidence or detections of vegetation features in this scene."
+                justification = "No vegetation evidence items found in existing session context."
+                ev_ids = []
+            elif is_water_query and not matched_items:
+                answer = "The available analysis does not contain enough evidence or detections of water bodies or flood features in this scene."
+                justification = "No water evidence items found in existing session context."
+                ev_ids = []
             else:
-                answer = f"Based on the retained session evidence, the identified features include: {desc_str}."
-                justification = f"Constructed from session evidence items: {', '.join(ev_ids)}."
+                if not matched_items:
+                    matched_items = ev_list
+
+                ev_ids = [item.get("evidence_id") for item in matched_items if item.get("evidence_id")] or ["E1"]
+                descriptions = []
+                for item in matched_items:
+                    eid = item.get("evidence_id", "E1")
+                    lbl = item.get("label", "feature")
+                    pct = item.get("coverage_pct")
+                    if pct:
+                        descriptions.append(f"{lbl} (approximately {pct}%, {eid})")
+                    elif item.get("finding"):
+                        descriptions.append(f"{item.get('finding')} ({eid})")
+                    else:
+                        descriptions.append(f"{lbl} ({eid})")
+
+                desc_str = ", ".join(descriptions)
+                if "why" in q_lower or "think that" in q_lower:
+                    answer = f"This assessment is grounded directly in the verified empirical evidence from the scene analysis: {desc_str}."
+                    justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+                elif is_veg_query:
+                    answer = f"Vegetation observations in this scene are concentrated in: {desc_str} based on verified spectral analysis."
+                    justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+                elif is_bldg_query:
+                    answer = f"Built-up and structural features are identified as: {desc_str} based on spatial and spectral signatures."
+                    justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+                else:
+                    answer = f"Based on the retained session evidence, the identified features include: {desc_str}."
+                    justification = f"Constructed from session evidence items: {', '.join(ev_ids)}."
 
             claims = [SynthesisClaim(text=answer, evidence_ids=ev_ids)]
             uncertainties = ["Model confidence is uncalibrated."] if confidence_status == "uncalibrated" else []
@@ -248,10 +266,17 @@ class DeterministicFallbackFormatter:
         elif confidence is not None:
             uncertainties.append(f"Empirical confidence score: {confidence:.2f}")
 
+        from .formatter import format_vlm_presentation
         final_text = "\n\n".join(p.strip() for p in paragraphs if p.strip())
+        formatted_text = format_vlm_presentation(
+            final_text,
+            query=query,
+            confidence=confidence,
+            confidence_status=confidence_status,
+        )
 
         return SynthesisResult(
-            answer=final_text,
+            answer=formatted_text,
             claims=claims,
             uncertainties=uncertainties,
             justification="Constructed deterministically from specialist tool findings and GIS metrics.",

@@ -101,6 +101,15 @@ def _is_account_level_rate_limit(error_body: str) -> bool:
     return any(ind in lower for ind in quota_indicators)
 
 
+def _sanitize_error_message(error_str: str) -> str:
+    """Mask sensitive API keys, auth tokens, and raw internal dumps."""
+    if not error_str:
+        return ""
+    masked = re.sub(r"sk-[a-zA-Z0-9_\-\.]{8,}", "sk-***", str(error_str))
+    masked = re.sub(r"Bearer\s+[a-zA-Z0-9_\-\.]+", "Bearer ***", masked)
+    return masked
+
+
 def _parse_and_validate_grounding(content_text: str, img_w: int, img_h: int) -> Optional[GroundingResult]:
     """
     Parse and strictly validate structured bounding boxes from model output.
@@ -221,100 +230,95 @@ class OpenRouterVisionProvider(VisionProvider):
         data_bytes = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(self._endpoint, data=data_bytes, headers=headers, method="POST")
 
-        last_error = None
-        for attempt in range(self.config.max_retries + 1):
-            try:
-                with urllib.request.urlopen(req, timeout=self.config.timeout) as resp:
-                    resp_body = resp.read().decode("utf-8")
-                    return json.loads(resp_body)
-
-            except urllib.error.HTTPError as e:
-                status_code = e.code
-                error_body = e.read().decode("utf-8", errors="replace")
-
-                if status_code in {401, 403}:
-                    raise VisionAuthenticationError(
-                        f"HTTP {status_code} from OpenRouter ({model_name}): {error_body}",
-                        provider=self.config.provider,
-                        status_code=status_code,
-                    )
-                elif status_code == 400:
+        try:
+            with urllib.request.urlopen(req, timeout=self.config.timeout) as resp:
+                resp_body = resp.read().decode("utf-8")
+                parsed = json.loads(resp_body)
+                if isinstance(parsed, dict) and "error" in parsed and not parsed.get("choices"):
+                    err_msg = _sanitize_error_message(str(parsed.get("error")))
                     raise VisionResponseError(
-                        f"HTTP 400 Bad Request from OpenRouter ({model_name}): {error_body}",
-                        provider=self.config.provider,
-                        status_code=400,
-                    )
-                elif status_code == 429:
-                    is_account_limit = _is_account_level_rate_limit(error_body)
-                    retry_after = None
-                    ra_hdr = e.headers.get("Retry-After") if hasattr(e, "headers") else None
-                    if ra_hdr:
-                        try:
-                            retry_after = float(ra_hdr)
-                        except ValueError:
-                            pass
-
-                    last_error = VisionRateLimitError(
-                        f"HTTP 429 Rate Limit from OpenRouter ({model_name}): {error_body}",
-                        provider=self.config.provider,
-                        status_code=429,
-                        is_account_limit=is_account_limit,
-                        retry_after=retry_after,
-                    )
-
-                    if is_account_limit:
-                        # Account-level daily limit: Fail fast, do not burn other model calls
-                        logger.error(f"Account-level rate limit detected: {error_body}")
-                        raise last_error
-
-                    if attempt < self.config.max_retries:
-                        sleep_s = retry_after if (retry_after is not None and retry_after <= 5.0) else (1.5 * (2 ** attempt))
-                        time.sleep(sleep_s)
-                        continue
-                    raise last_error
-
-                elif status_code in {500, 502, 503, 504}:
-                    last_error = VisionResponseError(
-                        f"HTTP {status_code} Upstream Server Error from OpenRouter ({model_name}): {error_body}",
-                        provider=self.config.provider,
-                        status_code=status_code,
-                    )
-                    if attempt < self.config.max_retries:
-                        time.sleep(1.0 * (2 ** attempt))
-                        continue
-                    raise last_error
-                else:
-                    raise VisionResponseError(
-                        f"HTTP {status_code} Error from OpenRouter ({model_name}): {error_body}",
-                        provider=self.config.provider,
-                        status_code=status_code,
-                    )
-
-            except urllib.error.URLError as e:
-                if "timed out" in str(e).lower():
-                    last_error = VisionTimeoutError(
-                        f"OpenRouter request timed out after {self.config.timeout}s for model {model_name}: {e}",
+                        f"Provider error from OpenRouter ({model_name}): {err_msg}",
                         provider=self.config.provider,
                     )
-                else:
-                    last_error = VisionNetworkError(
-                        f"Network error connecting to OpenRouter for model {model_name}: {e}",
-                        provider=self.config.provider,
-                    )
-                if attempt < self.config.max_retries:
-                    time.sleep(1.0 * (2 ** attempt))
-                    continue
-                raise last_error
+                return parsed
 
-            except TimeoutError as e:
-                last_error = VisionTimeoutError(
-                    f"OpenRouter socket timed out after {self.config.timeout}s for model {model_name}: {e}",
+        except urllib.error.HTTPError as e:
+            status_code = e.code
+            raw_body = e.read().decode("utf-8", errors="replace")
+            error_body = _sanitize_error_message(raw_body)
+
+            if status_code in {401, 403}:
+                raise VisionAuthenticationError(
+                    f"HTTP {status_code} from OpenRouter ({model_name}): {error_body}",
+                    provider=self.config.provider,
+                    status_code=status_code,
+                )
+            elif status_code == 429:
+                is_account_limit = _is_account_level_rate_limit(raw_body)
+                retry_after = None
+                ra_hdr = e.headers.get("Retry-After") if hasattr(e, "headers") else None
+                if ra_hdr:
+                    try:
+                        retry_after = float(ra_hdr)
+                    except ValueError:
+                        pass
+
+                err = VisionRateLimitError(
+                    f"HTTP 429 Rate Limit from OpenRouter ({model_name}): {error_body}",
+                    provider=self.config.provider,
+                    status_code=429,
+                    is_account_limit=is_account_limit,
+                    retry_after=retry_after,
+                )
+                if is_account_limit:
+                    logger.error(f"Account-level rate limit detected: {error_body}")
+                raise err
+
+            elif status_code in {500, 502, 503, 504} or status_code >= 500:
+                raise VisionResponseError(
+                    f"HTTP {status_code} Upstream Server Error from OpenRouter ({model_name}): {error_body}",
+                    provider=self.config.provider,
+                    status_code=status_code,
+                )
+            elif status_code in {400, 404, 422}:
+                raise VisionResponseError(
+                    f"HTTP {status_code} Provider Error from OpenRouter ({model_name}): {error_body}",
+                    provider=self.config.provider,
+                    status_code=status_code,
+                )
+            else:
+                raise VisionResponseError(
+                    f"HTTP {status_code} Error from OpenRouter ({model_name}): {error_body}",
+                    provider=self.config.provider,
+                    status_code=status_code,
+                )
+
+        except urllib.error.URLError as e:
+            err_msg = _sanitize_error_message(str(e))
+            if "timed out" in err_msg.lower():
+                raise VisionTimeoutError(
+                    f"OpenRouter request timed out after {self.config.timeout}s for model {model_name}: {err_msg}",
                     provider=self.config.provider,
                 )
-                if attempt < self.config.max_retries:
-                    time.sleep(1.0 * (2 ** attempt))
-                    continue
-                raise last_error
+            else:
+                raise VisionNetworkError(
+                    f"Network error connecting to OpenRouter for model {model_name}: {err_msg}",
+                    provider=self.config.provider,
+                )
+
+        except TimeoutError as e:
+            err_msg = _sanitize_error_message(str(e))
+            raise VisionTimeoutError(
+                f"OpenRouter socket timed out after {self.config.timeout}s for model {model_name}: {err_msg}",
+                provider=self.config.provider,
+            )
+
+        except ConnectionError as e:
+            err_msg = _sanitize_error_message(str(e))
+            raise VisionNetworkError(
+                f"Connection error connecting to OpenRouter for model {model_name}: {err_msg}",
+                provider=self.config.provider,
+            )
 
     def _execute_http_request(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Backward-compatible HTTP execution wrapper."""
@@ -332,7 +336,7 @@ class OpenRouterVisionProvider(VisionProvider):
         **kwargs: Any,
     ) -> VisionResponse:
         """
-        Synchronously analyze an image with resilient multi-model routing and fallbacks.
+        Synchronously analyze an image with resilient multi-model routing and automatic sequential fallback.
         """
         start_total = time.perf_counter()
 
@@ -361,7 +365,10 @@ class OpenRouterVisionProvider(VisionProvider):
         # 3. Determine candidate models list
         explicit_model = kwargs.get("model")
         if explicit_model:
-            candidate_models = [explicit_model]
+            from .config import resolve_model_slug
+            resolved_explicit = resolve_model_slug(explicit_model)
+            task_candidates = self.config.get_candidate_models_for_task(task)
+            candidate_models = [resolved_explicit] + [m for m in task_candidates if m != resolved_explicit]
         else:
             candidate_models = self.config.get_candidate_models_for_task(task)
 
@@ -371,6 +378,10 @@ class OpenRouterVisionProvider(VisionProvider):
 
         for idx, current_model in enumerate(candidate_models):
             attempted_models.append(current_model)
+            logger.info(
+                f"Attempting vision model: {current_model} for task '{task}' "
+                f"(candidate {idx + 1}/{len(candidate_models)})"
+            )
 
             payload: Dict[str, Any] = {
                 "model": current_model,
@@ -402,39 +413,76 @@ class OpenRouterVisionProvider(VisionProvider):
                     raise
                 last_error = e
                 fallback_reason = "upstream_rate_limit"
-                logger.warning(f"Model {current_model} rate limited (429). Attempting fallback...")
+                logger.warning(
+                    f"Model {current_model} rate limited (429). "
+                    f"Immediately attempting fallback to next model..."
+                )
                 continue
-            except (VisionTimeoutError, VisionNetworkError) as e:
+            except (VisionTimeoutError, TimeoutError) as e:
                 last_error = e
-                fallback_reason = "provider_timeout" if isinstance(e, VisionTimeoutError) else "network_error"
-                logger.warning(f"Model {current_model} hit network/timeout error. Attempting fallback...")
+                fallback_reason = "provider_timeout"
+                logger.warning(
+                    f"Model {current_model} timed out. "
+                    f"Immediately attempting fallback to next model..."
+                )
+                continue
+            except (VisionNetworkError, ConnectionError) as e:
+                last_error = e
+                fallback_reason = "network_error"
+                logger.warning(
+                    f"Model {current_model} hit network/connection error. "
+                    f"Immediately attempting fallback to next model..."
+                )
                 continue
             except VisionResponseError as e:
-                if e.status_code and e.status_code in {400, 404, 429, 500, 502, 503, 504}:
+                if e.status_code and (e.status_code in {400, 404, 422, 429, 500, 502, 503, 504} or e.status_code >= 500):
                     last_error = e
                     fallback_reason = f"upstream_error_{e.status_code}"
-                    logger.warning(f"Model {current_model} returned {e.status_code}. Attempting fallback...")
+                    logger.warning(
+                        f"Model {current_model} returned {e.status_code}. "
+                        f"Immediately attempting fallback to next model..."
+                    )
                     continue
                 else:
-                    # Non-transient error
-                    raise
+                    last_error = e
+                    fallback_reason = "provider_error"
+                    logger.warning(
+                        f"Model {current_model} returned provider error ({e}). "
+                        f"Immediately attempting fallback to next model..."
+                    )
+                    continue
             except VisionAuthenticationError:
                 # Auth error: fail immediately
                 raise
+            except Exception as e:
+                last_error = e
+                fallback_reason = "provider_error"
+                logger.warning(
+                    f"Model {current_model} encountered unexpected error ({type(e).__name__}). "
+                    f"Immediately attempting fallback to next model..."
+                )
+                continue
 
             # 4. Extract generated text strictly from choices[0].message.content
             try:
-                choice = raw_resp["choices"][0]
+                choices = raw_resp.get("choices") if isinstance(raw_resp, dict) else None
+                if not choices or not isinstance(choices, list):
+                    raise ValueError(f"Missing or invalid choices list: {raw_resp}")
+                choice = choices[0]
                 choice_msg = choice.get("message", {})
                 finish_reason = choice.get("finish_reason")
                 raw_content = choice_msg.get("content") or ""
                 content_text = raw_content.strip()
-            except (KeyError, IndexError, TypeError) as e:
+            except (KeyError, IndexError, TypeError, ValueError) as e:
                 last_error = VisionResponseError(
-                    f"Malformed response structure from OpenRouter ({current_model}): {raw_resp}",
+                    f"Malformed response structure from OpenRouter ({current_model})",
                     provider=self.config.provider,
                 )
                 fallback_reason = "malformed_response"
+                logger.warning(
+                    f"Model {current_model} returned malformed response. "
+                    f"Immediately attempting fallback to next model..."
+                )
                 continue
 
             # Ensure choices[0].message.content is non-empty; NEVER expose internal reasoning fields as final text
@@ -454,7 +502,8 @@ class OpenRouterVisionProvider(VisionProvider):
                         status_code=200,
                     )
                 logger.warning(
-                    f"Model {current_model} returned empty content (finish_reason={finish_reason}). Triggering fallback..."
+                    f"Model {current_model} returned empty content (finish_reason={finish_reason}). "
+                    f"Immediately attempting fallback to next model..."
                 )
                 continue
 
@@ -477,6 +526,16 @@ class OpenRouterVisionProvider(VisionProvider):
             latency_ms = round((time.perf_counter() - start_total) * 1000.0, 2)
             fallback_used = len(attempted_models) > 1
 
+            if fallback_used:
+                logger.info(
+                    f"Vision model fallback succeeded: {current_model} succeeded for task '{task}' "
+                    f"after previous model(s) {attempted_models[:-1]} failed (latency: {latency_ms}ms)."
+                )
+            else:
+                logger.info(
+                    f"Vision model {current_model} succeeded directly for task '{task}' (latency: {latency_ms}ms)."
+                )
+
             return VisionResponse(
                 text=content_text,
                 grounding=grounding_result,
@@ -490,8 +549,13 @@ class OpenRouterVisionProvider(VisionProvider):
                 fallback_reason=fallback_reason if fallback_used else None,
             )
 
-        raise last_error or VisionError(
-            f"All candidate vision models failed for task '{task}': {attempted_models}",
+        logger.error(
+            f"All {len(attempted_models)} candidate vision models failed for task '{task}': "
+            f"{attempted_models}. Final fallback reason: {fallback_reason}"
+        )
+        clean_models_str = ", ".join(attempted_models)
+        raise VisionError(
+            f"All candidate vision models failed to process the request: {clean_models_str}",
             provider=self.config.provider,
         )
 

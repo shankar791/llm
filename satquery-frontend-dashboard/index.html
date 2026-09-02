@@ -671,18 +671,18 @@
                                         <p class="text-[10px] text-slate-500">1 image (.jpeg, .jpg, .png, .geotiff)</p>
                                     </div>
                                 </div>
-                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="multi" data-title="Multi-Temporal Pair" data-icon="copy">
+                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="multi" data-title="Before / After Pair" data-icon="copy">
                                     <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center mt-0.5"><i data-lucide="copy" class="w-3.5 h-3.5"></i></div>
                                     <div>
-                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Multi-Image Pair (T1 & T2)</p>
-                                        <p class="text-[10px] text-slate-500">Dual pre/post rasters for ChangeFormer</p>
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Before / After Pair (T0 & T1)</p>
+                                        <p class="text-[10px] text-slate-500">Dual pre/post rasters for change detection</p>
                                     </div>
                                 </div>
-                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="sar" data-title="Sentinel-1 SAR Radar" data-icon="radio">
-                                    <div class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center mt-0.5"><i data-lucide="radio" class="w-3.5 h-3.5"></i></div>
+                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="sar" data-title="Optical + SAR Pair" data-icon="layers">
+                                    <div class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center mt-0.5"><i data-lucide="layers" class="w-3.5 h-3.5"></i></div>
                                     <div>
-                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Sentinel-1 SAR Options</p>
-                                        <p class="text-[10px] text-slate-500">Dual-pol VV / VH amplitude radar</p>
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Optical + SAR Pair</p>
+                                        <p class="text-[10px] text-slate-500">Image 1 = Optical, Image 2 = SAR Radar</p>
                                     </div>
                                 </div>
                             </div>
@@ -693,61 +693,64 @@
 
                     <!-- MODE 1: Single Image Slot -->
                     <div id="slot-single" class="mode-slot block">
-                        <label for="input-file-single" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-3 flex items-center justify-between transition-all">
-                            <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center"><i data-lucide="upload-cloud" class="w-4 h-4"></i></div>
-                                <div>
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200" id="label-file-single">Upload Optical Satellite Raster</p>
+                        <label for="input-file-single" id="drop-zone-single" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-3 flex items-center justify-between transition-all">
+                            <div class="flex items-center gap-2.5 flex-1 min-w-0">
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center flex-shrink-0"><i data-lucide="upload-cloud" class="w-4 h-4"></i></div>
+                                <div class="truncate flex-1">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-file-single">Upload Optical Satellite Raster</p>
                                     <p class="text-[10px] text-slate-500 dark:text-slate-400">Click or drag & drop .png, .jpg, .jpeg, .tif, .geotiff</p>
                                 </div>
                             </div>
-                            <span class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[10px] font-bold text-slate-700 dark:text-slate-200 shadow-sm">Browse</span>
+                            <img id="thumb-single" class="hidden w-9 h-9 object-cover rounded border border-slate-600 shadow-sm mr-2 flex-shrink-0" alt="Preview">
+                            <span class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[10px] font-bold text-slate-700 dark:text-slate-200 shadow-sm flex-shrink-0">Browse</span>
                             <input type="file" id="input-file-single" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
                         </label>
                     </div>
 
-                    <!-- MODE 2: Multi-Image Dual Slots -->
+                    <!-- MODE 2: Multi-Image Dual Slots (Before / After Pair) -->
                     <div id="slot-multi" class="mode-slot hidden grid grid-cols-2 gap-2">
-                        <label for="input-file-t1" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-emerald-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                        <label for="input-file-t1" id="drop-zone-t1" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-emerald-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
                             <i data-lucide="calendar" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i>
-                            <div class="truncate">
-                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t1">T1 Baseline Image</p>
-                                <p class="text-[9px] text-slate-500 dark:text-slate-400">e.g. May 2023 GeoTIFF</p>
+                            <div class="truncate flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t1">Image 1: Before (T0)</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400 truncate">Baseline acquisition</p>
                             </div>
+                            <img id="thumb-t1" class="hidden w-8 h-8 object-cover rounded border border-emerald-500/60 shadow-sm flex-shrink-0" alt="T0 Preview">
                             <input type="file" id="input-file-t1" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
                         </label>
 
-                        <label for="input-file-t2" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                        <label for="input-file-t2" id="drop-zone-t2" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
                             <i data-lucide="calendar" class="w-4 h-4 text-blue-500 flex-shrink-0"></i>
-                            <div class="truncate">
-                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t2">T2 Target Image</p>
-                                <p class="text-[9px] text-slate-500 dark:text-slate-400">e.g. May 2025 GeoTIFF</p>
+                            <div class="truncate flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t2">Image 2: After (T1)</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400 truncate">Post-change target</p>
                             </div>
+                            <img id="thumb-t2" class="hidden w-8 h-8 object-cover rounded border border-blue-500/60 shadow-sm flex-shrink-0" alt="T1 Preview">
                             <input type="file" id="input-file-t2" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
                         </label>
                     </div>
 
-                    <!-- MODE 3: SAR Dual-Pol Radar -->
-                    <div id="slot-sar" class="mode-slot hidden space-y-2">
-                        <div class="grid grid-cols-2 gap-2">
-                            <label for="input-file-vv" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-purple-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
-                                <i data-lucide="radio" class="w-4 h-4 text-purple-500 flex-shrink-0"></i>
-                                <div class="truncate">
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vv">VV Co-Pol Amplitude</p>
-                                    <p class="text-[9px] text-slate-500 dark:text-slate-400">Vertical-Vertical SAR</p>
-                                </div>
-                                <input type="file" id="input-file-vv" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
-                            </label>
+                    <!-- MODE 3: Optical + SAR Pair -->
+                    <div id="slot-sar" class="mode-slot hidden grid grid-cols-2 gap-2">
+                        <label for="input-file-vv" id="drop-zone-vv" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                            <i data-lucide="image" class="w-4 h-4 text-blue-500 flex-shrink-0"></i>
+                            <div class="truncate flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vv">Image 1: Optical</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400 truncate">Multispectral scene</p>
+                            </div>
+                            <img id="thumb-vv" class="hidden w-8 h-8 object-cover rounded border border-blue-500/60 shadow-sm flex-shrink-0" alt="Optical Preview">
+                            <input type="file" id="input-file-vv" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                        </label>
 
-                            <label for="input-file-vh" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-purple-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
-                                <i data-lucide="radio" class="w-4 h-4 text-purple-500 flex-shrink-0"></i>
-                                <div class="truncate">
-                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vh">VH Cross-Pol Amplitude</p>
-                                    <p class="text-[9px] text-slate-500 dark:text-slate-400">Vertical-Horizontal SAR</p>
-                                </div>
-                                <input type="file" id="input-file-vh" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
-                            </label>
-                        </div>
+                        <label for="input-file-vh" id="drop-zone-vh" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-purple-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                            <i data-lucide="radio" class="w-4 h-4 text-purple-500 flex-shrink-0"></i>
+                            <div class="truncate flex-1 min-w-0">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vh">Image 2: SAR Radar</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400 truncate">Microwave backscatter</p>
+                            </div>
+                            <img id="thumb-vh" class="hidden w-8 h-8 object-cover rounded border border-purple-500/60 shadow-sm flex-shrink-0" alt="SAR Preview">
+                            <input type="file" id="input-file-vh" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                        </label>
                     </div>
                 </div>
 
@@ -1409,14 +1412,28 @@
             // File Inputs & Labels
             const inputFileSingle = document.getElementById('input-file-single');
             const labelFileSingle = document.getElementById('label-file-single');
+            const thumbSingle = document.getElementById('thumb-single');
+            const dropZoneSingle = document.getElementById('drop-zone-single');
+
             const inputFileT1 = document.getElementById('input-file-t1');
             const labelT1 = document.getElementById('label-t1');
+            const thumbT1 = document.getElementById('thumb-t1');
+            const dropZoneT1 = document.getElementById('drop-zone-t1');
+
             const inputFileT2 = document.getElementById('input-file-t2');
             const labelT2 = document.getElementById('label-t2');
+            const thumbT2 = document.getElementById('thumb-t2');
+            const dropZoneT2 = document.getElementById('drop-zone-t2');
+
             const inputFileVv = document.getElementById('input-file-vv');
             const labelVv = document.getElementById('label-vv');
+            const thumbVv = document.getElementById('thumb-vv');
+            const dropZoneVv = document.getElementById('drop-zone-vv');
+
             const inputFileVh = document.getElementById('input-file-vh');
             const labelVh = document.getElementById('label-vh');
+            const thumbVh = document.getElementById('thumb-vh');
+            const dropZoneVh = document.getElementById('drop-zone-vh');
 
             // Map Controls & Toolbar
             const btnZoomIn = document.getElementById('btn-zoom-in');
@@ -1438,10 +1455,36 @@
             let currentMode = 'single';
             let activeRunId = null;
             let latestRunData = null;
+            let analysisContext = null;
+            let selectedSampleFilenames = null;
             let map = null;
             let aoiLayer = null;
             let isSplitActive = false;
             let isDrawingAoi = false;
+
+            function clearFileInputsAndPreviews() {
+                selectedSampleFilenames = null;
+                if (inputFileSingle) inputFileSingle.value = '';
+                if (inputFileT1) inputFileT1.value = '';
+                if (inputFileT2) inputFileT2.value = '';
+                if (inputFileVv) inputFileVv.value = '';
+                if (inputFileVh) inputFileVh.value = '';
+
+                if (labelFileSingle) labelFileSingle.innerText = "Upload Optical Satellite Raster";
+                if (labelT1) labelT1.innerText = "T1 Baseline Image";
+                if (labelT2) labelT2.innerText = "T2 Target Image";
+                if (labelVv) labelVv.innerText = "VV Co-Pol Amplitude";
+                if (labelVh) labelVh.innerText = "VH Cross-Pol Amplitude";
+
+                if (thumbSingle) { thumbSingle.src = ''; thumbSingle.classList.add('hidden'); }
+                if (thumbT1) { thumbT1.src = ''; thumbT1.classList.add('hidden'); }
+                if (thumbT2) { thumbT2.src = ''; thumbT2.classList.add('hidden'); }
+                if (thumbVv) { thumbVv.src = ''; thumbVv.classList.add('hidden'); }
+                if (thumbVh) { thumbVh.src = ''; thumbVh.classList.add('hidden'); }
+
+                const drawer = document.getElementById('attachment-drawer');
+                if (drawer) drawer.classList.add('hidden');
+            }
 
             window.openModal = function(m) {
                 if (m) {
@@ -1616,6 +1659,7 @@
                     const query = card.getAttribute('data-query');
                     const mode = card.getAttribute('data-mode') || 'single';
                     const sampleNames = (card.getAttribute('data-sample') || '').split(',');
+                    selectedSampleFilenames = sampleNames;
 
                     closeModal(datasetsModal);
 
@@ -1782,60 +1826,77 @@
             }
 
             // --------------------------------------------------------------
-            // File Upload Change Listeners (Visual Feedback & Filenames)
+            // File Upload Change Listeners (Visual Feedback, Previews & Drag-and-Drop)
             // --------------------------------------------------------------
             function formatFileSize(bytes) {
+                if (!bytes) return '0 B';
                 if (bytes < 1024) return bytes + ' B';
                 if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
                 return (bytes / 1048576).toFixed(1) + ' MB';
             }
 
-            if (inputFileSingle) {
-                inputFileSingle.addEventListener('change', () => {
-                    if (inputFileSingle.files.length > 0) {
-                        const f = inputFileSingle.files[0];
-                        if (labelFileSingle) {
-                            labelFileSingle.innerHTML = `<span class="text-emerald-500 font-bold">✓ Uploaded:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span> <span class="text-slate-400 font-normal">(${formatFileSize(f.size)})</span>`;
+            function bindFileInputWithPreview(inputEl, labelEl, thumbEl, dropZoneEl, badgeText, badgeColorClass) {
+                if (!inputEl) return;
+
+                const updatePreview = () => {
+                    if (inputEl.files && inputEl.files.length > 0) {
+                        const file = inputEl.files[0];
+                        if (labelEl) {
+                            labelEl.innerHTML = `<span class="${badgeColorClass} font-bold">✓ ${badgeText}:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${file.name}</span> <span class="text-slate-400 font-normal">(${formatFileSize(file.size)})</span>`;
+                        }
+                        if (thumbEl) {
+                            const isRasterImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp)$/i.test(file.name);
+                            if (isRasterImage) {
+                                const reader = new FileReader();
+                                reader.onload = (e) => {
+                                    thumbEl.src = e.target.result;
+                                    thumbEl.classList.remove('hidden');
+                                };
+                                reader.readAsDataURL(file);
+                            } else {
+                                thumbEl.classList.add('hidden');
+                            }
                         }
                     }
-                });
+                };
+
+                inputEl.addEventListener('change', updatePreview);
+
+                if (dropZoneEl) {
+                    dropZoneEl.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZoneEl.classList.add('border-blue-500', 'bg-blue-50/50', 'dark:bg-blue-900/20');
+                    });
+                    dropZoneEl.addEventListener('dragleave', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZoneEl.classList.remove('border-blue-500', 'bg-blue-50/50', 'dark:bg-blue-900/20');
+                    });
+                    dropZoneEl.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        dropZoneEl.classList.remove('border-blue-500', 'bg-blue-50/50', 'dark:bg-blue-900/20');
+                        if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                            inputEl.files = e.dataTransfer.files;
+                            updatePreview();
+                        }
+                    });
+                }
             }
 
-            if (inputFileT1) {
-                inputFileT1.addEventListener('change', () => {
-                    if (inputFileT1.files.length > 0) {
-                        const f = inputFileT1.files[0];
-                        if (labelT1) labelT1.innerHTML = `<span class="text-emerald-500 font-bold">✓ T1:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
-                    }
-                });
-            }
+            bindFileInputWithPreview(inputFileSingle, labelFileSingle, thumbSingle, dropZoneSingle, "Uploaded", "text-blue-500");
+            bindFileInputWithPreview(inputFileT1, labelT1, thumbT1, dropZoneT1, "T0 (Before)", "text-emerald-500");
+            bindFileInputWithPreview(inputFileT2, labelT2, thumbT2, dropZoneT2, "T1 (After)", "text-blue-500");
+            bindFileInputWithPreview(inputFileVv, labelVv, thumbVv, dropZoneVv, "Optical", "text-blue-500");
+            bindFileInputWithPreview(inputFileVh, labelVh, thumbVh, dropZoneVh, "SAR", "text-purple-500");
 
-            if (inputFileT2) {
-                inputFileT2.addEventListener('change', () => {
-                    if (inputFileT2.files.length > 0) {
-                        const f = inputFileT2.files[0];
-                        if (labelT2) labelT2.innerHTML = `<span class="text-blue-500 font-bold">✓ T2:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
-                    }
+            [inputFileSingle, inputFileT1, inputFileT2, inputFileVv, inputFileVh].forEach(inp => {
+                if (inp) inp.addEventListener('change', () => {
+                    analysisContext = null;
+                    selectedSampleFilenames = null;
                 });
-            }
-
-            if (inputFileVv) {
-                inputFileVv.addEventListener('change', () => {
-                    if (inputFileVv.files.length > 0) {
-                        const f = inputFileVv.files[0];
-                        if (labelVv) labelVv.innerHTML = `<span class="text-purple-500 font-bold">✓ VV:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
-                    }
-                });
-            }
-
-            if (inputFileVh) {
-                inputFileVh.addEventListener('change', () => {
-                    if (inputFileVh.files.length > 0) {
-                        const f = inputFileVh.files[0];
-                        if (labelVh) labelVh.innerHTML = `<span class="text-purple-500 font-bold">✓ VH:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
-                    }
-                });
-            }
+            });
 
             // --------------------------------------------------------------
             // History Management
@@ -1944,6 +2005,7 @@
                 btnNewChat.addEventListener('click', () => {
                     activeRunId = null;
                     latestRunData = null;
+                    analysisContext = null;
                     if (activeSessionText) activeSessionText.innerText = "New Spatial Session";
                     if (mainPrompt) mainPrompt.value = "";
                     if (labelFileSingle) labelFileSingle.innerText = "Upload Optical Satellite Raster";
@@ -2007,8 +2069,39 @@
             }
 
             // --------------------------------------------------------------
-            // Display Results
+            // Display Results & Structured Presentation Formatter
             // --------------------------------------------------------------
+            function formatResponseForDisplay(rawText) {
+                if (!rawText) return 'Analysis complete.';
+                let html = String(rawText).trim();
+
+                // Format LaTeX formulas if present e.g. $$\text{NDVI} = ...$$
+                html = html.replace(/\$\$([\s\S]*?)\$\$/g, '<div class="my-2 p-2.5 rounded-lg bg-slate-900/80 text-blue-300 font-mono text-[11px] text-center overflow-x-auto border border-blue-500/20">$1</div>');
+
+                // Convert ### Headings to clean, prominent section titles
+                html = html.replace(/^###\s+([^\n]+)/gm, '<h4 class="text-[11px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 mt-3.5 mb-1.5 flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span><span>$1</span></h4>');
+
+                // Convert bullet lines - item to cleanly styled list elements
+                html = html.replace(/^-\s+([^\n]+)/gm, '<li class="flex items-start gap-2 text-xs text-slate-700 dark:text-slate-300 ml-1 mb-1.5"><span class="text-blue-500 font-bold mt-0.5">•</span><span>$1</span></li>');
+
+                // Group contiguous <li> items into a clean <ul> container
+                html = html.replace(/((?:<li[^>]*>.*?<\/li>\s*)+)/g, '<ul class="my-2 space-y-1">$1</ul>');
+
+                // Convert **bold** to strong with high-contrast font styling
+                html = html.replace(/\*\*([^*]+)\*\*/g, '<strong class="font-bold text-slate-900 dark:text-slate-100">$1</strong>');
+
+                // Convert paragraphs
+                const parts = html.split(/\n\n+/);
+                html = parts.map(p => {
+                    const trimmed = p.trim();
+                    if (!trimmed) return '';
+                    if (trimmed.startsWith('<h4') || trimmed.startsWith('<ul') || trimmed.startsWith('<div')) return trimmed;
+                    return `<p class="text-xs leading-relaxed text-slate-800 dark:text-slate-200 mb-2">${trimmed}</p>`;
+                }).join('\n');
+
+                return html;
+            }
+
             function displayAnalysisResult(queryText, data, imageNames = []) {
                 const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -2073,6 +2166,22 @@
                     `;
                 }
 
+                let sectionsHtml = '';
+                if (Array.isArray(data.sections) && data.sections.length > 0) {
+                    sectionsHtml = `
+                        <div class="mt-3 space-y-2.5 border-t border-slate-200 dark:border-slate-700/60 pt-2.5">
+                            ${data.sections.map(sec => `
+                                <div class="space-y-1">
+                                    <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${sec.title}:</p>
+                                    <ul class="list-disc list-inside space-y-0.5 text-xs text-slate-700 dark:text-slate-300">
+                                        ${(sec.items || []).map(item => `<li>${item}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
                 const turnHtml = `
                     <div class="chat-msg flex justify-end items-start gap-2">
                         <div class="flex flex-col items-end gap-1.5 max-w-[88%]">
@@ -2114,9 +2223,11 @@
                                     </button>
                                 </div>
                                 
-                                <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-line">
-                                    ${data.answer || 'Analysis complete.'}
+                                <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200 space-y-1.5 text-left">
+                                    ${formatResponseForDisplay(data.answer)}
                                 </div>
+
+                                ${sectionsHtml}
 
                                 ${quantMetricsHtml}
                                 ${evidenceHtml}
@@ -2125,7 +2236,9 @@
                     </div>
                 `;
 
-                chatStream.innerHTML = turnHtml;
+                const welcomeCard = document.getElementById('welcome-card');
+                if (welcomeCard) welcomeCard.remove();
+                chatStream.insertAdjacentHTML('beforeend', turnHtml);
                 chatStream.scrollTop = chatStream.scrollHeight;
                 lucide.createIcons();
 
@@ -2137,11 +2250,58 @@
                 });
             }
 
+            function displayFollowUpResult(queryText, data) {
+                let sectionsHtml = '';
+                if (Array.isArray(data.sections) && data.sections.length > 0) {
+                    sectionsHtml = `
+                        <div class="mt-3 space-y-2.5 border-t border-slate-200 dark:border-slate-700/60 pt-2.5">
+                            ${data.sections.map(sec => `
+                                <div class="space-y-1">
+                                    <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">${sec.title}:</p>
+                                    <ul class="list-disc list-inside space-y-0.5 text-xs text-slate-700 dark:text-slate-300">
+                                        ${(sec.items || []).map(item => `<li>${item}</li>`).join('')}
+                                    </ul>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+
+                const modelLabel = (data.execution_details && data.execution_details.models && data.execution_details.models[0] && data.execution_details.models[0].actual_model) || 'TokenRouter (GLM-5.3-Free)';
+
+                const followUpHtml = `
+                    <div class="chat-msg flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-blue-600">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        </div>
+                        <div class="space-y-3 max-w-[90%] text-xs text-slate-800 dark:text-slate-200">
+                            <div class="p-4 rounded-2xl glass-sub-card border border-blue-200/80 dark:border-slate-700 shadow-sm leading-relaxed space-y-3">
+                                <div class="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-700 flex-wrap gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider text-[11px]">${data.analysis_type || 'Follow-Up Analysis'}</span>
+                                        <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-700 dark:text-slate-300 font-medium">⚡ ${modelLabel}</span>
+                                    </div>
+                                    <span class="text-[10px] text-slate-400">${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200 space-y-1.5 text-left">
+                                    ${formatResponseForDisplay(data.answer)}
+                                </div>
+                                ${sectionsHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                chatStream.insertAdjacentHTML('beforeend', followUpHtml);
+                chatStream.scrollTop = chatStream.scrollHeight;
+                lucide.createIcons();
+            }
+
             // --------------------------------------------------------------
             // Execute Analysis (POST /api/query)
             // --------------------------------------------------------------
             async function handleUserSend(overrideSampleFilenames = null) {
                 let queryText = mainPrompt ? mainPrompt.value.trim() : '';
+                if (!queryText) return;
 
                 let filesToUpload = [];
                 if (overrideSampleFilenames && overrideSampleFilenames.length > 0) {
@@ -2161,17 +2321,216 @@
                     if (inputFileVh && inputFileVh.files.length > 0) filesToUpload.push(inputFileVh.files[0]);
                 }
 
-                if (!queryText) {
-                    if (filesToUpload.length > 0) {
-                        if (currentMode === 'multi') queryText = "Detect and quantify surface changes between these multi-temporal rasters.";
-                        else if (currentMode === 'sar') queryText = "Analyze this region using SAR dual-polarization amplitude information.";
-                        else queryText = "Analyze this satellite image and describe all identified terrain and structures.";
-                    } else {
-                        return;
+                if (filesToUpload.length === 0 && selectedSampleFilenames && selectedSampleFilenames.length > 0) {
+                    for (const name of selectedSampleFilenames) {
+                        const sampleFile = await getSampleFile(name);
+                        filesToUpload.push(sampleFile);
                     }
+                    selectedSampleFilenames = null;
                 }
 
+                const activeContext = analysisContext || latestRunData;
                 const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                // --------------------------------------------------------------
+                // CASE 1: FOLLOW-UP QUERY (Initial analysis already exists in state & no new files picked)
+                // --------------------------------------------------------------
+                if (activeContext && filesToUpload.length === 0 && !overrideSampleFilenames) {
+                    const welcomeCard = document.getElementById('chat-welcome-card');
+                    if (welcomeCard) welcomeCard.remove();
+
+                    const userTurnHtml = `
+                        <div class="chat-msg flex justify-end items-start gap-2">
+                            <div class="flex flex-col items-end gap-1.5 max-w-[88%]">
+                                <div class="p-3 rounded-2xl bg-[#edf4ff] dark:bg-slate-800/90 border border-blue-100/80 dark:border-slate-700 shadow-sm space-y-1.5">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100/70 dark:bg-blue-900/40 text-[9.5px] font-mono text-blue-700 dark:text-blue-300 font-bold">
+                                        💬 Follow-Up Question
+                                    </span>
+                                    <p class="text-xs font-medium text-slate-800 dark:text-slate-200 px-1 leading-relaxed">
+                                        ${queryText}
+                                    </p>
+                                </div>
+                                <span class="text-[10px] text-slate-400 flex items-center gap-1 mr-1">
+                                    ${timeStr} <i data-lucide="check-check" class="w-3 h-3 text-blue-500"></i>
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                    chatStream.insertAdjacentHTML('beforeend', userTurnHtml);
+                    if (mainPrompt) mainPrompt.value = '';
+
+                    // Clear file preview / inputs from UI after sending, keeping analysisContext active
+                    clearFileInputsAndPreviews();
+
+                    const thinkingId = 'thinking-' + Date.now();
+                    const thinkingHtml = `
+                        <div id="${thinkingId}" class="chat-msg flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm animate-pulse">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-blue-500"></i>
+                            </div>
+                            <div class="p-3.5 rounded-2xl glass-sub-card text-xs text-slate-600 dark:text-slate-300 flex items-center gap-3 border border-blue-500/20">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping flex-shrink-0"></span>
+                                <span>Reasoning over previous analysis with TokenRouter GLM-5.3-Free...</span>
+                            </div>
+                        </div>
+                    `;
+                    chatStream.insertAdjacentHTML('beforeend', thinkingHtml);
+                    chatStream.scrollTop = chatStream.scrollHeight;
+                    lucide.createIcons();
+
+                    try {
+                        const res = await fetch(`${API_BASE}/api/followup`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                question: queryText,
+                                context: activeContext,
+                                session_id: activeRunId || (activeContext && activeContext.session_id)
+                            })
+                        });
+
+                        document.getElementById(thinkingId)?.remove();
+
+                        if (!res.ok) {
+                            const errBody = await res.text();
+                            throw new Error(`Server returned HTTP ${res.status}: ${errBody || res.statusText}`);
+                        }
+
+                        const data = await res.json();
+                        if (data.error && !data.answer) throw new Error(data.error);
+
+                        // Preserve & update analysisContext for subsequent follow-up questions
+                        if (analysisContext) {
+                            analysisContext.answer = data.answer;
+                            if (data.sections) analysisContext.sections = data.sections;
+                            if (data.evidence) analysisContext.evidence = data.evidence;
+                            if (!analysisContext.conversation) analysisContext.conversation = [];
+                            analysisContext.conversation.push(
+                                { role: 'user', text: queryText },
+                                { role: 'assistant', text: data.answer }
+                            );
+                        }
+                        if (latestRunData) {
+                            latestRunData.answer = data.answer;
+                            if (data.sections) latestRunData.sections = data.sections;
+                        }
+
+                        displayFollowUpResult(queryText, data);
+                        renderHistoryList();
+
+                    } catch (err) {
+                        document.getElementById(thinkingId)?.remove();
+                        console.error("Follow-Up Query Error:", err);
+                        const errorHtml = `
+                            <div class="chat-msg flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-full bg-red-50 dark:bg-slate-800 border border-red-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-red-600">
+                                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                                </div>
+                                <div class="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 max-w-[88%] text-left space-y-1">
+                                    <p class="font-bold">Follow-Up Synthesis Notice</p>
+                                    <p>${err.message || 'Unable to synthesize follow-up from existing evidence.'}</p>
+                                </div>
+                            </div>
+                        `;
+                        chatStream.insertAdjacentHTML('beforeend', errorHtml);
+                        chatStream.scrollTop = chatStream.scrollHeight;
+                        lucide.createIcons();
+                    }
+                    return;
+                }
+
+                // --------------------------------------------------------------
+                // CASE 2: FRESH TEXT PROMPT (No previous analysis & no image uploaded)
+                // --------------------------------------------------------------
+                if (!activeContext && filesToUpload.length === 0 && !overrideSampleFilenames) {
+                    const welcomeCard = document.getElementById('chat-welcome-card');
+                    if (welcomeCard) welcomeCard.remove();
+
+                    const userTurnHtml = `
+                        <div class="chat-msg flex justify-end items-start gap-2">
+                            <div class="flex flex-col items-end gap-1.5 max-w-[88%]">
+                                <div class="p-3 rounded-2xl bg-[#edf4ff] dark:bg-slate-800/90 border border-blue-100/80 dark:border-slate-700 shadow-sm space-y-1.5">
+                                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-100/70 dark:bg-purple-900/40 text-[9.5px] font-mono text-purple-700 dark:text-purple-300 font-bold">
+                                        💬 Direct Text Query
+                                    </span>
+                                    <p class="text-xs font-medium text-slate-800 dark:text-slate-200 px-1 leading-relaxed">
+                                        ${queryText}
+                                    </p>
+                                </div>
+                                <span class="text-[10px] text-slate-400 flex items-center gap-1 mr-1">
+                                    ${timeStr} <i data-lucide="check-check" class="w-3 h-3 text-blue-500"></i>
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                    chatStream.insertAdjacentHTML('beforeend', userTurnHtml);
+                    if (mainPrompt) mainPrompt.value = '';
+
+                    clearFileInputsAndPreviews();
+
+                    const thinkingId = 'thinking-' + Date.now();
+                    const thinkingHtml = `
+                        <div id="${thinkingId}" class="chat-msg flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-purple-50 dark:bg-slate-800 border border-purple-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm animate-pulse">
+                                <i data-lucide="sparkles" class="w-4 h-4 text-purple-500"></i>
+                            </div>
+                            <div class="p-3.5 rounded-2xl glass-sub-card text-xs text-slate-600 dark:text-slate-300 flex items-center gap-3 border border-purple-500/20">
+                                <span class="inline-block w-2.5 h-2.5 rounded-full bg-purple-500 animate-ping flex-shrink-0"></span>
+                                <span>Reasoning with TokenRouter GLM-5.3-Free LLM...</span>
+                            </div>
+                        </div>
+                    `;
+                    chatStream.insertAdjacentHTML('beforeend', thinkingHtml);
+                    chatStream.scrollTop = chatStream.scrollHeight;
+                    lucide.createIcons();
+
+                    try {
+                        const res = await fetch(`${API_BASE}/api/followup`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                question: queryText,
+                                context: null
+                            })
+                        });
+
+                        document.getElementById(thinkingId)?.remove();
+
+                        if (!res.ok) {
+                            const errBody = await res.text();
+                            throw new Error(`Server returned HTTP ${res.status}: ${errBody || res.statusText}`);
+                        }
+
+                        const data = await res.json();
+                        if (data.error && !data.answer) throw new Error(data.error);
+
+                        displayFollowUpResult(queryText, data);
+                        renderHistoryList();
+
+                    } catch (err) {
+                        document.getElementById(thinkingId)?.remove();
+                        console.error("Direct Text Query Error:", err);
+                        const errorHtml = `
+                            <div class="chat-msg flex items-start gap-3">
+                                <div class="w-8 h-8 rounded-full bg-red-50 dark:bg-slate-800 border border-red-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-red-600">
+                                    <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                                </div>
+                                <div class="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 max-w-[88%] text-left space-y-1">
+                                    <p class="font-bold">Direct Query Notice</p>
+                                    <p>${err.message || 'Unable to process query.'}</p>
+                                </div>
+                            </div>
+                        `;
+                        chatStream.insertAdjacentHTML('beforeend', errorHtml);
+                        chatStream.scrollTop = chatStream.scrollHeight;
+                        lucide.createIcons();
+                    }
+                    return;
+                }
+
+                // --------------------------------------------------------------
+                // CASE 3: INITIAL IMAGE ANALYSIS (Image file uploaded or sample loaded)
+                // --------------------------------------------------------------
                 const uploadedNames = filesToUpload.map(f => f.name);
 
                 const userTurnHtml = `
@@ -2215,21 +2574,7 @@
                 try {
                     const formData = new FormData();
                     formData.append('query', queryText);
-
-                    if (filesToUpload.length === 0) {
-                        if (queryText.toLowerCase().includes('sar') || queryText.toLowerCase().includes('radar')) {
-                            const f1 = await getSampleFile('sar_0810.png');
-                            const f2 = await getSampleFile('opt_0810.png');
-                            filesToUpload.push(f1, f2);
-                        } else if (queryText.toLowerCase().includes('change') || queryText.toLowerCase().includes('between')) {
-                            const f1 = await getSampleFile('opt_0611.png');
-                            const f2 = await getSampleFile('opt_0810.png');
-                            filesToUpload.push(f1, f2);
-                        } else {
-                            const f1 = await getSampleFile('opt_0611.png');
-                            filesToUpload.push(f1);
-                        }
-                    }
+                    formData.append('mode', currentMode);
 
                     filesToUpload.forEach(f => formData.append('files', f));
 
@@ -2252,6 +2597,26 @@
 
                     activeRunId = data.run_id;
                     latestRunData = data;
+                    analysisContext = {
+                        answer: data.answer,
+                        sections: data.sections || [],
+                        claims: data.claims || [],
+                        uncertainties: data.uncertainties || [],
+                        evidence: data.evidence || [],
+                        outputs: data.outputs || [],
+                        tools_executed: (data.outputs || []).map(o => o.tool_id || o.tool),
+                        gis_metrics: (data.outputs || []).find(o => o.changed_area_ha !== undefined || o.area_ha !== undefined) || {},
+                        execution_details: data.execution_details || {},
+                        model_metadata: data.model_metadata || {},
+                        conversation: [
+                            { role: 'user', text: queryText },
+                            { role: 'assistant', text: data.answer }
+                        ]
+                    };
+
+                    // Clear pending file inputs and thumbnail previews so subsequent questions automatically route to follow-up LLM
+                    clearFileInputsAndPreviews();
+
                     displayAnalysisResult(queryText, data, filesToUpload.map(f => f.name));
                     renderHistoryList();
 

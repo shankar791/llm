@@ -44,10 +44,15 @@ class HistoryStore:
             return []
 
     def _write_all(self, items: List[Dict[str, Any]]) -> None:
-        temp_file = self.history_file.with_suffix(".tmp")
-        with open(temp_file, "w", encoding="utf-8") as f:
-            json.dump(items, f, indent=2, ensure_ascii=False)
-        temp_file.replace(self.history_file)
+        data = json.dumps(items, indent=2, ensure_ascii=False)
+        for _ in range(5):
+            try:
+                with open(self.history_file, "w", encoding="utf-8") as f:
+                    f.write(data)
+                return
+            except (PermissionError, OSError):
+                time.sleep(0.05)
+
 
     def create_entry(
         self,

@@ -418,10 +418,12 @@ def test_step17_minimax_rich_vision_synthesis_quality():
     assert res.synthesis_source == "llm"
     assert res.fallback_used is False
     assert res.fallback_reason is None
-    words = res.answer.split()
-    assert 80 <= len(words) <= 150
+    assert "### Analysis" in res.answer
+    assert "### Key Observations" in res.answer
+    assert "### Interpretation" in res.answer
+    assert "### Confidence" in res.answer
     paragraphs = [p for p in res.answer.split("\n\n") if p.strip()]
-    assert len(paragraphs) == 1
+    assert len(paragraphs) >= 3
     assert "40.4%" in res.answer
     assert "winding river" in res.answer.lower() or "river" in res.answer.lower()
     assert "urban" in res.answer.lower() or "residential" in res.answer.lower()

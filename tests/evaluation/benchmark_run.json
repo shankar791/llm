@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-09-02T04:21:01.129740+00:00",
+  "timestamp": "2026-09-02T17:14:52.369882+00:00",
   "evaluator_version": "1.2.0",
   "dataset": "tests/evaluation/qwen_vlm_samples.json",
   "dataset_samples": 25,
@@ -79,7 +79,7 @@
         "id": "sample-06",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.04,
+        "latency_ms": 0.06,
         "mean_iou": 1.0,
         "precision": 1.0,
         "recall": 0.5,
@@ -115,7 +115,7 @@
         "id": "sample-10",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.01,
+        "latency_ms": 0.02,
         "mean_iou": 0.281,
         "precision": 0.0,
         "recall": 0.0,
@@ -149,7 +149,7 @@
         "id": "sample-14",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.02,
+        "latency_ms": 0.01,
         "mean_iou": 0.197,
         "precision": 0.0,
         "recall": 0.0,
@@ -203,7 +203,7 @@
         "id": "sample-20",
         "task": "vqa",
         "status": "success",
-        "latency_ms": 0.01,
+        "latency_ms": 0.0,
         "keyword_recall": 0.75,
         "substantive": true
       },
@@ -211,7 +211,7 @@
         "id": "sample-21",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.02,
+        "latency_ms": 0.01,
         "mean_iou": 0.057,
         "precision": 0.0,
         "recall": 0.0,
@@ -265,7 +265,7 @@
     "latencies": {
       "mean_ms": 0.01,
       "median_ms": 0.0,
-      "p95_ms": 0.02
+      "p95_ms": 0.04
     },
     "vqa_metrics": {
       "semantic_keyword_recall_pct": 82.27,
@@ -291,7 +291,7 @@
         "id": "sample-01",
         "task": "vqa",
         "status": "success",
-        "latency_ms": 0.0,
+        "latency_ms": 0.01,
         "keyword_recall": 1.0,
         "substantive": true
       },
@@ -421,7 +421,7 @@
         "id": "sample-16",
         "task": "caption",
         "status": "success",
-        "latency_ms": 0.0,
+        "latency_ms": 0.01,
         "concept_coverage": 1.0,
         "quality_score": 1.0
       },
@@ -447,7 +447,7 @@
         "id": "sample-19",
         "task": "vqa",
         "status": "success",
-        "latency_ms": 0.0,
+        "latency_ms": 0.01,
         "keyword_recall": 0.75,
         "substantive": true
       },
@@ -463,7 +463,7 @@
         "id": "sample-21",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.02,
+        "latency_ms": 0.05,
         "mean_iou": 0.029,
         "precision": 0.0,
         "recall": 0.0,
@@ -499,7 +499,7 @@
         "id": "sample-25",
         "task": "ground",
         "status": "success",
-        "latency_ms": 0.02,
+        "latency_ms": 0.04,
         "mean_iou": 0.043,
         "precision": 0.0,
         "recall": 0.0,

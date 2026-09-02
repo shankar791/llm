@@ -28,7 +28,7 @@ class SessionStore:
         else:
             self.storage_dir = Path(storage_dir)
         self.storage_dir.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._mem_cache: Dict[str, Dict[str, Any]] = {}
         self._raster_cache: Dict[str, List[RasterInput]] = {}
 
@@ -90,6 +90,33 @@ class SessionStore:
             }
         ]
 
+        # Multi-image list & context foundation
+        images_list = []
+        for idx, fn in enumerate(image_filenames):
+            iid = f"img_{session_id[:8]}_{idx}" if len(image_filenames) > 1 else f"img_{session_id[:8]}"
+            rp = saved_raster_paths[idx] if idx < len(saved_raster_paths) else None
+            # extract GIS metrics if available in tool_results
+            gis_res = {}
+            if tool_results:
+                for tr in tool_results:
+                    meta = tr.get("metadata", {})
+                    for gk in ("area_ha", "area_m2", "polygon_count", "changed_area_ha", "total_area_ha"):
+                        if gk in meta:
+                            gis_res[gk] = meta[gk]
+            images_list.append({
+                "image_id": iid,
+                "image_path": rp,
+                "image_ref": rp,
+                "filename": fn,
+                "analysis": analysis,
+                "task": tool_results[0].get("tool", tool_results[0].get("tool_id", "analysis")) if tool_results else "analysis",
+                "evidence": evidence or [],
+                "gis_results": gis_res,
+                "timestamp": now,
+            })
+
+        active_img_ids = [img["image_id"] for img in images_list]
+
         session_data = {
             "session_id": session_id,
             "created_at": now,
@@ -103,10 +130,17 @@ class SessionStore:
                 "metadata": img_meta,
                 "raster_paths": saved_raster_paths,
             },
+            "images": images_list,
+            "context": {
+                "active_image_ids": active_img_ids,
+                "relevant_analysis_results": [analysis] if analysis else [],
+                "session_metadata": execution_metadata or {},
+            },
             "analysis": analysis,
             "evidence": evidence,
             "tool_results": tool_results,
             "conversation": conversation,
+            "messages": conversation,
             "execution_metadata": execution_metadata or {},
         }
 
@@ -264,6 +298,196 @@ class SessionStore:
                         shutil.rmtree(item, ignore_errors=True)
                     elif item.is_file():
                         item.unlink(missing_ok=True)
+
+    # =========================================================================
+    # Step 1: In-Memory Current-Session Memory API
+    # =========================================================================
+
+    def create_or_get_session(
+        self,
+        session_id: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Create a new empty in-memory session or retrieve an existing one.
+        Guarantees that a new session starts completely empty:
+        - 0 conversation messages
+        - 0 registered images
+        - empty context
+        Purely in-memory: does not persist to disk, SQLite, or database.
+        """
+        with self._lock:
+            if session_id in self._mem_cache:
+                return self._mem_cache[session_id]
+
+            now = datetime.now(timezone.utc).isoformat()
+            new_session = {
+                "session_id": session_id,
+                "created_at": now,
+                "updated_at": now,
+                "conversation": [],
+                "messages": [],
+                "images": [],
+                "context": {
+                    "active_image_ids": [],
+                    "relevant_analysis_results": [],
+                    "session_metadata": metadata or {},
+                },
+                "metadata": metadata or {},
+                "analysis": {},
+                "evidence": [],
+                "tool_results": [],
+                "execution_metadata": {},
+            }
+            # Link messages list to conversation list
+            new_session["messages"] = new_session["conversation"]
+            self._mem_cache[session_id] = new_session
+            return new_session
+
+    def add_message(
+        self,
+        session_id: str,
+        role: str,
+        content: str,
+        timestamp: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Add a conversational message (user message or assistant response) with timestamp.
+        Kept strictly separate from image analysis records.
+        Purely in-memory: does not write to disk.
+        """
+        with self._lock:
+            sess = self.get_session_memory(session_id)
+            if sess is None:
+                sess = self.create_or_get_session(session_id)
+
+            ts = timestamp or datetime.now(timezone.utc).isoformat()
+            msg = {
+                "role": role,
+                "content": content,
+                "timestamp": ts,
+                **kwargs,
+            }
+
+            if "conversation" not in sess:
+                sess["conversation"] = []
+            sess["conversation"].append(msg)
+            sess["messages"] = sess["conversation"]
+            sess["updated_at"] = ts
+
+            self._mem_cache[session_id] = sess
+            return msg
+
+    def add_user_message(
+        self,
+        session_id: str,
+        message: str,
+        timestamp: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Convenience method to record a user message in session memory."""
+        return self.add_message(session_id, role="user", content=message, timestamp=timestamp, **kwargs)
+
+    def add_assistant_message(
+        self,
+        session_id: str,
+        response: str,
+        timestamp: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """Convenience method to record an assistant response in session memory."""
+        return self.add_message(session_id, role="assistant", content=response, timestamp=timestamp, **kwargs)
+
+    def register_image(
+        self,
+        session_id: str,
+        image_id: Optional[str] = None,
+        image_path: Optional[str] = None,
+        image_ref: Optional[str] = None,
+        filename: Optional[str] = None,
+        analysis: Optional[Any] = None,
+        task: Optional[str] = None,
+        evidence: Optional[List[Dict[str, Any]]] = None,
+        gis_results: Optional[Dict[str, Any]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Register an analyzed image into session memory.
+        Stores image reference + analysis + task/tool + evidence + GIS results.
+        Kept separate from conversation messages.
+        Updates active_image_ids and relevant_analysis_results in current session context.
+        Purely in-memory: does not write to disk.
+        """
+        import uuid
+        with self._lock:
+            sess = self.get_session_memory(session_id)
+            if sess is None:
+                sess = self.create_or_get_session(session_id)
+
+            now = datetime.now(timezone.utc).isoformat()
+            final_image_id = image_id or f"img_{uuid.uuid4().hex[:8]}"
+            ref_path = image_path or image_ref
+            final_filename = filename or (Path(ref_path).name if ref_path else f"{final_image_id}.png")
+
+            image_record = {
+                "image_id": final_image_id,
+                "image_path": ref_path,
+                "image_ref": ref_path,
+                "filename": final_filename,
+                "analysis": analysis,
+                "task": task or "analysis",
+                "evidence": evidence or [],
+                "gis_results": gis_results or {},
+                "metadata": metadata or {},
+                "timestamp": now,
+            }
+
+            if "images" not in sess:
+                sess["images"] = []
+            sess["images"].append(image_record)
+
+            if "context" not in sess:
+                sess["context"] = {
+                    "active_image_ids": [],
+                    "relevant_analysis_results": [],
+                    "session_metadata": {},
+                }
+
+            if final_image_id not in sess["context"]["active_image_ids"]:
+                sess["context"]["active_image_ids"].append(final_image_id)
+
+            if analysis is not None:
+                sess["context"]["relevant_analysis_results"].append(analysis)
+
+            sess["updated_at"] = now
+            self._mem_cache[session_id] = sess
+            return image_record
+
+    def get_session_memory(self, session_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve current in-memory session data for session_id.
+        Purely in-memory: reads from memory cache.
+        """
+        with self._lock:
+            return self._mem_cache.get(session_id)
+
+    def clear_session(self, session_id: str) -> bool:
+        """
+        Clear and purge the in-memory session only.
+        Does not touch persistent storage or other sessions.
+        """
+        with self._lock:
+            self._raster_cache.pop(session_id, None)
+            existed = session_id in self._mem_cache
+            self._mem_cache.pop(session_id, None)
+            return existed
+
+    def clear_all_sessions(self) -> None:
+        """Clear all active in-memory sessions."""
+        with self._lock:
+            self._mem_cache.clear()
+            self._raster_cache.clear()
 
 
 session_store = SessionStore()

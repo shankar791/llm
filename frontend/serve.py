@@ -6,6 +6,7 @@ import re
 
 PORT = 3000
 DIRECTORY = os.path.dirname(os.path.abspath(__file__))
+DASHBOARD_DIR = os.path.normpath(os.path.join(DIRECTORY, '..', 'satquery-frontend-dashboard'))
 
 # Ensure common 3D and media extensions have proper MIME types
 mimetypes.add_type("application/wasm", ".wasm")
@@ -34,7 +35,25 @@ class RangeHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_GET(self):
-        """Serve a GET request with Range support for video/audio streaming."""
+        """Serve a GET request with Range support and dashboard routing."""
+        # Route /mission and /monitor to the dashboard
+        url_path = self.path.split('?')[0].split('#')[0]  # strip query/fragment
+        if url_path == '/mission' or url_path == '/monitor':
+            # Serve the dashboard index.html
+            dashboard_index = os.path.join(DASHBOARD_DIR, 'index.html')
+            if os.path.exists(dashboard_index):
+                self.send_response(200)
+                self.send_header('Content-Type', 'text/html; charset=utf-8')
+                with open(dashboard_index, 'rb') as f:
+                    content = f.read()
+                self.send_header('Content-Length', str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_error(404, "Dashboard not found")
+                return
+
         path = self.translate_path(self.path)
         if os.path.isdir(path):
             return super().do_GET()

@@ -39,24 +39,26 @@ def run(label, query, images):
     print("  evidence imgs:", len(d.get("evidence_images_b64", [])))
 
 
-run("1. Single-image VQA (mandatory)", 
-    "Describe the land-cover and major objects visible in this image.",
-    ["optical_t0.png"])
+if __name__ == "__main__":
+    run("1. Single-image VQA (mandatory)", 
+        "Describe the land-cover and major objects visible in this image.",
+        ["optical_t0.png"])
 
-run("2. Grounding",
-    "Highlight the water body referred to in the query.",
-    ["optical_t0.png"])
+    run("2. Grounding",
+        "Highlight the water body referred to in the query.",
+        ["optical_t0.png"])
 
-run("3. Bi-temporal change (mandatory)",
-    "What changed between these two dates, and where did the change occur?",
-    ["optical_t0.png", "optical_t1.png"])
+    run("3. Bi-temporal change (mandatory)",
+        "What changed between these two dates, and where did the change occur?",
+        ["optical_t0.png", "optical_t1.png"])
 
-run("4. Optical-SAR fusion (cross-modal)",
-    "Use the optical and SAR images together to identify built-up and water-covered regions.",
-    ["optical_t1.png", "sar_t1.png"])
+    run("4. Optical-SAR fusion (cross-modal)",
+        "Use the optical and SAR images together to identify built-up and water-covered regions.",
+        ["optical_t1.png", "sar_t1.png"])
 
-run("5. Built-up change quantification",
-    "Has the built-up area increased, decreased, or remained unchanged?",
-    ["optical_t0.png", "optical_t1.png"])
+    run("5. Built-up change quantification",
+        "Has the built-up area increased, decreased, or remained unchanged?",
+        ["optical_t0.png", "optical_t1.png"])
 
-print("\nALL FLOWS EXECUTED.")
+    print("\nALL FLOWS EXECUTED.")
+

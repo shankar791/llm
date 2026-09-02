@@ -122,14 +122,18 @@ class RasterInput:
     def _detect_modality(self) -> str:
         """
         Heuristic SAR vs optical detection:
-         - SAR: single-band grayscale with speckle, or filename hints
+         - SAR: single-band grayscale with speckle, or filename hints (sar, s1, vv, vh, risat)
          - Optical: 3+ band color or multispectral
         """
         name = self.filename.lower()
-        if any(k in name for k in ("sar", "_s1", "s1a", "s1b", "risat")):
+        if any(k in name for k in ("sar", "_s1", "s1a", "s1b", "risat", "vv", "vh", "radar")):
             return "sar"
         if self.arr.ndim == 2 or (self.arr.ndim == 3 and self.arr.shape[2] == 1):
             return "sar"
+        if self.arr.ndim == 3 and self.arr.shape[2] >= 3:
+            # If all bands are identical, it's a grayscale/single-polarization representation (SAR)
+            if np.array_equal(self.arr[..., 0], self.arr[..., 1]) and np.array_equal(self.arr[..., 1], self.arr[..., 2]):
+                return "sar"
         return "optical"
 
     def _extract_metadata(self) -> dict:
@@ -308,16 +312,10 @@ def validate_inputs(rasters: list[RasterInput]) -> dict:
         scenario["scenario"] = "single_image"
     elif n == 2:
         same_modality = modalities[0] == modalities[1]
-        max_h = max(sizes[0][0], sizes[1][0]) or 1
-        max_w = max(sizes[0][1], sizes[1][1]) or 1
-        similar_size = (abs(sizes[0][0] - sizes[1][0]) < 0.25 * max_h and
-                        abs(sizes[0][1] - sizes[1][1]) < 0.25 * max_w)
-        if same_modality and similar_size:
+        if same_modality:
             scenario["scenario"] = "bi_temporal_pair"
-        elif not same_modality:
-            scenario["scenario"] = "cross_modal_pair"
         else:
-            scenario["scenario"] = "two_independent"
+            scenario["scenario"] = "cross_modal_pair"
     else:
         scenario["scenario"] = f"multi_{n}"
 

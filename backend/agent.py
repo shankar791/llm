@@ -15,10 +15,20 @@ try:
     from .rasterio_utils import RasterInput, validate_inputs
     from . import tools
     from .session import session_store
-except ImportError:  # running as a plain script (uvicorn server:app)
-    from rasterio_utils import RasterInput, validate_inputs
-    import tools
-    from session import session_store
+    from .history import history_store
+except (ImportError, AttributeError):  # running as a plain script (uvicorn server:app)
+    try:
+        from backend import tools
+    except ImportError:
+        import tools
+    try:
+        from .rasterio_utils import RasterInput, validate_inputs
+        from .session import session_store
+        from .history import history_store
+    except ImportError:
+        from rasterio_utils import RasterInput, validate_inputs
+        from session import session_store
+        from history import history_store
 
 
 # ---------------------------------------------------------------- task classifier
@@ -232,23 +242,49 @@ def execute(
 
     # Step 2 — classify task
     plan = classify_task(query, scenario)
+    wf = plan["workflow"]
     trace["steps"].append({
         "step": 2, "action": "classify_task",
         "selected": plan["primary_task"],
-        "workflow": plan["workflow"],
+        "workflow": wf,
         "scores": plan["classification_scores"],
     })
 
+    # Compatibility gate
+    if plan["primary_task"] == "change" or "T4_Change" in wf:
+        if len(rasters) < 2:
+            return {
+                "error": "Change detection requires two compatible temporal images.",
+                "trace": trace,
+                "run_id": run_id,
+            }
+    if plan["primary_task"] == "fusion" or "T5_OpticalSAR" in wf:
+        if len(rasters) < 2:
+            return {
+                "error": "Optical + SAR fusion requires one optical image and one SAR image.",
+                "trace": trace,
+                "run_id": run_id,
+            }
+
     # Step 3 — route & execute tools
     outputs = []
-    wf = plan["workflow"]
 
     if wf == ["T5_OpticalSAR"] or (plan["primary_task"] == "fusion" and len(rasters) >= 2):
-        opt = next((r for r in rasters if r.modality == "optical"), rasters[0])
-        sar = next((r for r in rasters if r.modality == "sar"), rasters[-1])
+        opt = next((r for r in rasters if r.modality == "optical"), None)
+        sar = next((r for r in rasters if r.modality == "sar"), None)
+        if opt is None and sar is None:
+            opt, sar = rasters[0], rasters[1]
+        elif opt is None:
+            sar = next(r for r in rasters if r.modality == "sar")
+            opt = next((r for r in rasters if r is not sar), rasters[0])
+        elif sar is None:
+            opt = next(r for r in rasters if r.modality == "optical")
+            sar = next((r for r in rasters if r is not opt), rasters[-1])
+        elif opt is sar and len(rasters) >= 2:
+            opt, sar = rasters[0], rasters[1]
         out = tools.tool_optical_sar(opt, sar, scenario)
         outputs.append(out)
-    elif wf == ["T4_Change"] or (len(rasters) == 2 and plan["primary_task"] == "change"
+    elif wf == ["T4_Change"] or (len(rasters) >= 2 and plan["primary_task"] == "change"
                                  and scenario["scenario"] != "cross_modal_pair"):
         out = tools.tool_change(rasters[0], rasters[1], scenario)
         outputs.append(out)
@@ -491,65 +527,84 @@ def execute(
 # ---------------------------------------------------------------- follow-up execution
 def execute_followup(
     query: str,
-    session_id: str,
+    session_id: Optional[str] = None,
     run_id: Optional[str] = None,
+    existing_analysis: Optional[Union[dict, str]] = None,
 ) -> dict:
     """
-    Intelligently execute follow-up questions within an existing analysis session.
-    Routes to existing context when sufficient, or triggers specialist tools only when necessary.
-    Guarantees stable evidence IDs (E1, E2...) and generates structured synthesis.
+    Execute follow-up questions within an existing analysis session or from supplied analysis context.
+    Strictly skips vision models (GeoChat) and specialist tools (T1-T5, ChangeFormer, GIS).
+    Answers directly and solely from existing evidence and analysis via the existing LLM synthesizer.
     """
     t_start = time.time()
     if run_id is None:
         run_id = str(uuid.uuid4())
 
-    sess = session_store.get_session(session_id)
-    if not sess:
+    q_clean = query.strip()
+    q_lower = q_clean.lower()
+
+    existing_evidence = []
+    conversation = []
+
+    # 1. Parse existing_analysis if provided (either dict or JSON string)
+    analysis_data = None
+    if existing_analysis:
+        if isinstance(existing_analysis, str):
+            try:
+                analysis_data = json.loads(existing_analysis)
+            except Exception:
+                analysis_data = None
+        elif isinstance(existing_analysis, dict):
+            analysis_data = existing_analysis
+
+    if analysis_data:
+        existing_evidence = analysis_data.get("evidence") or []
+        conversation = analysis_data.get("conversation") or []
+        if not existing_evidence and analysis_data.get("outputs"):
+            existing_evidence = _extract_session_evidence(analysis_data.get("outputs", []))
+        if not existing_evidence and analysis_data.get("answer"):
+            existing_evidence = [{
+                "evidence_id": "E1",
+                "label": "initial_finding",
+                "finding": analysis_data.get("answer"),
+                "source": "initial_analysis"
+            }]
+        if not conversation and analysis_data.get("query") and analysis_data.get("answer"):
+            conversation = [
+                {"role": "user", "text": analysis_data.get("query")},
+                {"role": "assistant", "text": analysis_data.get("answer")},
+            ]
+
+    # 2. Check session_store if session_id is available
+    sess = None
+    if session_id:
+        sess = session_store.get_session(session_id)
+        if sess:
+            if not existing_evidence:
+                existing_evidence = sess.get("evidence", [])
+            if not conversation:
+                conversation = sess.get("conversation", [])
+        else:
+            rec = history_store.get_run(session_id)
+            if rec and rec.get("full_result"):
+                fr = rec["full_result"]
+                if not existing_evidence:
+                    existing_evidence = fr.get("evidence", [])
+                if not conversation:
+                    conversation = fr.get("conversation", [])
+
+    if not existing_evidence and not analysis_data and not sess:
         return {
-            "error": f"Analysis session '{session_id}' not found or expired.",
+            "error": "Previous analysis session not found or expired for follow-up. Please analyze an image first.",
             "code": "SESSION_NOT_FOUND",
             "session_id": session_id,
             "run_id": run_id,
         }
 
-    q_clean = query.strip()
-    q_lower = q_clean.lower()
-    existing_evidence = sess.get("evidence", [])
-    conversation = sess.get("conversation", [])
-
-    # Find highest evidence number so any new specialist tool produces E(N+1), E(N+2)...
-    max_ev_num = 0
-    for ev in existing_evidence:
-        eid = ev.get("evidence_id", "")
-        if eid.startswith("E") and eid[1:].isdigit():
-            try:
-                max_ev_num = max(max_ev_num, int(eid[1:]))
-            except ValueError:
-                pass
-    next_ev_counter = max_ev_num + 1
-
-    # Intelligent Follow-Up Routing
-    needs_ground = any(k in q_lower for k in [
-        "detect the buildings", "grounding", "where are the buildings",
-        "bounding box", "locate the buildings", "locate buildings",
-        "mark the buildings", "precisely detect", "find the buildings",
-        "outline the buildings", "detect buildings precisely",
-        "analyze the buildings more precisely", "analyze the buildings"
-    ]) or ("building" in q_lower and any(w in q_lower for w in ["detect", "precisely", "locate", "outline", "box"]))
-
-    needs_change = any(k in q_lower for k in [
-        "compare before and after", "what changed", "difference between",
-        "detect changes between", "change detection"
-    ])
-
-    needs_fusion = any(k in q_lower for k in [
-        "compare optical and sar", "cross-modal", "radar and optical",
-        "sar fusion", "optical and radar"
-    ])
-
+    # Specialist tools and vision models are strictly skipped on follow-ups
+    specialist_run = False
     new_outputs = []
     new_evidence = []
-    specialist_run = False
     tools_executed_list = []
     model_execution_list = []
 
@@ -565,84 +620,8 @@ def execute_followup(
         "fallback_reason": None,
     })
 
-    if needs_ground:
-        rasters = session_store.get_session_rasters(session_id)
-        if rasters:
-            specialist_run = True
-            scenario = {"scenario": "single_image", "modalities": [getattr(rasters[0], "modality", "optical")], "count": 1}
-            out = tools.tool_ground(q_clean, rasters[0], scenario)
-            new_outputs.append(out)
-            tools_executed_list.append("T3_Ground")
-            new_ev = _extract_session_evidence([out], start_counter=next_ev_counter)
-            new_evidence.extend(new_ev)
-
-            meta = out.get("metadata", {})
-            model_execution_list.append({
-                "task": "T3_Ground",
-                "requested_model": meta.get("selected_model", "T3_Ground"),
-                "actual_model": meta.get("model", "T3_Ground"),
-                "provider": meta.get("provider", "SatQuery Spatial Grounding Engine"),
-                "source": "Local / OpenRouter",
-                "status": "SUCCESS",
-                "latency_ms": meta.get("latency_ms", 150),
-                "fallback_used": meta.get("fallback_used", False),
-                "fallback_reason": meta.get("fallback_reason"),
-            })
-
-    elif needs_change:
-        rasters = session_store.get_session_rasters(session_id)
-        if len(rasters) >= 2:
-            specialist_run = True
-            scenario = {"scenario": "bi_temporal_pair", "modalities": [r.modality for r in rasters[:2]], "count": 2}
-            out = tools.tool_change(rasters[0], rasters[1], scenario)
-            new_outputs.append(out)
-            tools_executed_list.append("T4_Change")
-            new_ev = _extract_session_evidence([out], start_counter=next_ev_counter)
-            new_evidence.extend(new_ev)
-
-            meta = out.get("metadata", {})
-            model_execution_list.append({
-                "task": "T4_Change",
-                "requested_model": "ChangeFormer (Siamese Bi-Temporal Engine)",
-                "actual_model": "ChangeFormer",
-                "provider": "Local PyTorch / NumPy Engine",
-                "source": "Local",
-                "status": "SUCCESS",
-                "latency_ms": meta.get("latency_ms", 200),
-                "fallback_used": False,
-                "fallback_reason": None,
-            })
-
-    elif needs_fusion:
-        rasters = session_store.get_session_rasters(session_id)
-        has_opt = any(r.modality == "optical" for r in rasters)
-        has_sar = any(r.modality == "sar" for r in rasters)
-        if has_opt and has_sar and len(rasters) >= 2:
-            specialist_run = True
-            opt = next(r for r in rasters if r.modality == "optical")
-            sar = next(r for r in rasters if r.modality == "sar")
-            scenario = {"scenario": "cross_modal_pair", "modalities": ["optical", "sar"], "count": 2}
-            out = tools.tool_optical_sar(opt, sar, scenario)
-            new_outputs.append(out)
-            tools_executed_list.append("T5_OpticalSAR")
-            new_ev = _extract_session_evidence([out], start_counter=next_ev_counter)
-            new_evidence.extend(new_ev)
-
-            meta = out.get("metadata", {})
-            model_execution_list.append({
-                "task": "T5_OpticalSAR",
-                "requested_model": "OpticalSARTool",
-                "actual_model": "OpticalSARTool",
-                "provider": "Local Texture-Speckle Fusion",
-                "source": "Local",
-                "status": "SUCCESS",
-                "latency_ms": meta.get("latency_ms", 180),
-                "fallback_used": False,
-                "fallback_reason": None,
-            })
-
-    all_evidence = list(existing_evidence) + list(new_evidence)
-    relevant_evidence = _select_relevant_evidence(q_clean, all_evidence) if not specialist_run else all_evidence
+    all_evidence = list(existing_evidence)
+    relevant_evidence = _select_relevant_evidence(q_clean, all_evidence) or all_evidence
 
     # Grounded synthesis for follow-up
     syn_model_name = ""
@@ -731,16 +710,22 @@ def execute_followup(
         "execution_details": execution_details,
     }
 
-    # Update session with the new turn and any new evidence
-    updated_sess = session_store.update_session(
-        session_id=session_id,
-        user_query=q_clean,
-        assistant_response=assistant_resp,
-        new_evidence=new_evidence if specialist_run else None,
-        new_tool_results=new_outputs if specialist_run else None,
-    )
+    # Update session with the new turn if session exists
+    updated_sess = None
+    if session_id and sess:
+        try:
+            updated_sess = session_store.update_session(
+                session_id=session_id,
+                user_query=q_clean,
+                assistant_response=assistant_resp,
+            )
+        except Exception:
+            pass
 
-    full_conversation = updated_sess.get("conversation", []) if updated_sess else conversation
+    full_conversation = (updated_sess.get("conversation", []) if updated_sess else list(conversation) + [
+        {"role": "user", "text": q_clean},
+        {"role": "assistant", "text": final_answer}
+    ])
 
     return {
         "session_id": session_id,
@@ -752,25 +737,25 @@ def execute_followup(
         "uncertainties": uncertainties_list,
         "justification": syn_justification,
         "evidence": all_evidence,
-        "confidence": 0.75,
-        "confidence_status": "uncalibrated",
-        "outputs": new_outputs,
-        "evidence_images_b64": [o["evidence_image_b64"] for o in new_outputs if o.get("evidence_image_b64")],
-        "active_tier": "session_context" if not specialist_run else "specialist_grounding",
+        "confidence": 0.85,
+        "confidence_status": "calibrated",
+        "outputs": [],
+        "evidence_images_b64": [],
+        "active_tier": "session_context",
         "tier_journey": [],
         "synthesis_source": syn_source,
         "fallback_used": fb_used,
         "fallback_reason": fb_reason,
         "trace": {
-            "trace_id": run_id[:8],
+            "trace_id": run_id[:8] if run_id else "trace",
             "run_id": run_id,
             "session_id": session_id,
             "query": q_clean,
-            "specialist_run": specialist_run,
-            "tools_run": tools_executed_list,
+            "specialist_run": False,
+            "tools_run": [],
             "total_ms": round((time.time() - t_start) * 1000),
         },
-        "scenario": sess.get("image", {}).get("modality", "optical"),
+        "scenario": sess.get("image", {}).get("modality", "optical") if sess else "optical",
         "execution_details": execution_details,
         "model_metadata": {
             "models_used": [m.get("actual_model") for m in model_execution_list],

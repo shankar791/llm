@@ -19,6 +19,11 @@ from ai.vision.config import (
     DEFAULT_VISION_PRIMARY_MODEL,
     DEFAULT_VISION_SECONDARY_MODEL,
     DEFAULT_VISION_TERTIARY_MODEL,
+    MODEL_1,
+    MODEL_2,
+    MODEL_3,
+    MODEL_4,
+    MODEL_5,
     VisionConfig,
 )
 from ai.vision.errors import (
@@ -59,21 +64,27 @@ def test_vision_config_defaults():
     assert cfg.caption_model == "google/gemma-4-26b-a4b-it:free"
     assert cfg.ground_model == "google/gemma-4-31b-it:free"
 
-    # Candidate lists
+    # Candidate lists (5-model cascade in exact order)
     assert cfg.get_candidate_models_for_task("vqa") == [
         "google/gemma-4-26b-a4b-it:free",
         "google/gemma-4-31b-it:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "minimax/minimax-m3:free",
+        "thinkingmachines/inkling:free",
     ]
     assert cfg.get_candidate_models_for_task("caption") == [
         "google/gemma-4-26b-a4b-it:free",
         "google/gemma-4-31b-it:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "minimax/minimax-m3:free",
+        "thinkingmachines/inkling:free",
     ]
     assert cfg.get_candidate_models_for_task("ground") == [
         "google/gemma-4-31b-it:free",
         "google/gemma-4-26b-a4b-it:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+        "minimax/minimax-m3:free",
+        "thinkingmachines/inkling:free",
     ]
 
 
@@ -438,5 +449,161 @@ def test_successful_caption_extraction_with_stop_finish_reason(monkeypatch):
     assert captured_payload is not None
     assert captured_payload["max_tokens"] == 768
     assert captured_payload["reasoning"] == {"effort": "low"}
+
+
+# ============================================================
+# 8. 5-Model Automatic Sequential Fallback Tests
+# ============================================================
+
+def test_fallback_model1_fails_model2_succeeds(monkeypatch):
+    """
+    Test: Model 1 fails (429 Rate limit) -> Model 2 succeeds.
+    Verifies that Model 1 was attempted once without repeated retry,
+    and execution immediately fell back to Model 2.
+    """
+    cfg = VisionConfig(api_key="sk-test-key", max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    attempted = []
+
+    def mock_single_request(payload, model_name):
+        attempted.append(model_name)
+        if model_name == MODEL_1:
+            raise VisionRateLimitError("Upstream rate limit on Model 1", is_account_limit=False)
+        elif model_name == MODEL_2:
+            return {
+                "choices": [
+                    {"message": {"role": "assistant", "content": "Model 2 detected agricultural fields."}}
+                ]
+            }
+        raise AssertionError(f"Unexpected model called: {model_name}")
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    resp = provider.analyze_image_sync(_create_dummy_image(), prompt="What land cover?", task="vqa")
+
+    assert resp.selected_model == MODEL_2
+    assert resp.attempted_models == [MODEL_1, MODEL_2]
+    assert attempted == [MODEL_1, MODEL_2]
+    assert resp.fallback_used is True
+    assert resp.fallback_reason == "upstream_rate_limit"
+    assert "Model 2 detected agricultural fields" in resp.text
+
+
+def test_fallback_model1_2_3_fail_model4_succeeds(monkeypatch):
+    """
+    Test: Model 1 -> Model 2 -> Model 3 fail -> Model 4 succeeds.
+    Verifies sequential failover:
+    - Model 1 fails with 429 rate limit
+    - Model 2 fails with 502 upstream server error
+    - Model 3 fails with timeout
+    - Model 4 (minimax_m3) succeeds
+    """
+    cfg = VisionConfig(api_key="sk-test-key", max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    attempted = []
+
+    def mock_single_request(payload, model_name):
+        attempted.append(model_name)
+        if model_name == MODEL_1:
+            raise VisionRateLimitError("Rate limit on Model 1", is_account_limit=False)
+        elif model_name == MODEL_2:
+            raise VisionResponseError("502 Bad Gateway", status_code=502)
+        elif model_name == MODEL_3:
+            raise VisionTimeoutError("Model 3 timed out")
+        elif model_name == MODEL_4:
+            return {
+                "choices": [
+                    {"message": {"role": "assistant", "content": "Model 4 successfully analyzed urban zone."}}
+                ]
+            }
+        raise AssertionError(f"Unexpected model called: {model_name}")
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    resp = provider.analyze_image_sync(_create_dummy_image(), prompt="Analyze scene", task="vqa")
+
+    assert resp.selected_model == MODEL_4
+    assert resp.attempted_models == [MODEL_1, MODEL_2, MODEL_3, MODEL_4]
+    assert attempted == [MODEL_1, MODEL_2, MODEL_3, MODEL_4]
+    assert resp.fallback_used is True
+    assert resp.fallback_reason == "provider_timeout"
+    assert "Model 4 successfully analyzed urban zone" in resp.text
+
+
+def test_fallback_all_models_fail_clean_error(monkeypatch):
+    """
+    Test: When all 5 models fail, returns one clean error without exposing API keys or provider internals.
+    """
+    secret_key = "sk-or-v1-secret-never-expose-this-12345"
+    cfg = VisionConfig(api_key=secret_key, max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    attempted = []
+
+    def mock_single_request(payload, model_name):
+        attempted.append(model_name)
+        raise VisionResponseError(f"HTTP 500 error leaking secret key {secret_key}", status_code=500)
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    with pytest.raises(VisionError) as exc_info:
+        provider.analyze_image_sync(_create_dummy_image(), prompt="Identify targets", task="vqa")
+
+    err_msg = str(exc_info.value)
+    # Check that all 5 models were attempted in order
+    assert len(attempted) == 5
+    assert attempted == [MODEL_1, MODEL_2, MODEL_3, MODEL_4, MODEL_5]
+    # Check that secret API key is never exposed
+    assert secret_key not in err_msg
+    assert "sk-" not in err_msg
+    # Check clean error message
+    assert "All candidate vision models failed to process the request" in err_msg
+
+
+def test_fallback_preserves_same_image_and_user_prompt(monkeypatch):
+    """
+    Test: Every fallback model receives the exact same image URL and exact same user prompt.
+    """
+    cfg = VisionConfig(api_key="sk-test-key", max_retries=0)
+    provider = OpenRouterVisionProvider(config=cfg)
+
+    captured_payloads = []
+
+    def mock_single_request(payload, model_name):
+        captured_payloads.append((model_name, payload))
+        if model_name != MODEL_3:
+            raise VisionResponseError("503 Service Unavailable", status_code=503)
+        return {
+            "choices": [
+                {"message": {"role": "assistant", "content": "Analysis complete."}}
+            ]
+        }
+
+    monkeypatch.setattr(provider, "_execute_single_request", mock_single_request)
+
+    test_prompt = "What features are visible in this high-resolution scene?"
+    img = _create_dummy_image(80, 80)
+    resp = provider.analyze_image_sync(img, prompt=test_prompt, task="vqa")
+
+    assert resp.selected_model == MODEL_3
+    assert len(captured_payloads) == 3
+
+    # Compare payload contents across models 1, 2, 3
+    first_image_url = None
+    for m_name, payload in captured_payloads:
+        msgs = payload["messages"]
+        user_msg = next(m for m in msgs if m["role"] == "user")
+        text_content = next(c["text"] for c in user_msg["content"] if c["type"] == "text")
+        img_url = next(c["image_url"]["url"] for c in user_msg["content"] if c["type"] == "image_url")
+
+        assert text_content == test_prompt
+        assert img_url.startswith("data:image/jpeg;base64,")
+        if first_image_url is None:
+            first_image_url = img_url
+        else:
+            assert img_url == first_image_url
+
 
 

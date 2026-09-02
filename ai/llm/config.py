@@ -15,8 +15,8 @@ except ImportError:
     pass
 
 
-DEFAULT_LLM_MODEL = "z-ai/glm-5.3"
-DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_LLM_MODEL = "z-ai/glm-5.3-free"
+DEFAULT_LLM_BASE_URL = "https://api.tokenrouter.com/v1"
 
 
 @dataclass
