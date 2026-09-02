@@ -26,6 +26,7 @@ class DeterministicFallbackFormatter:
         intent: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
         fallback_reason: Optional[str] = None,
+        existing_evidence: Optional[List[Dict[str, Any]]] = None,
     ) -> SynthesisResult:
         """
         Produce a structured fallback result using only verified empirical facts.
@@ -43,7 +44,7 @@ class DeterministicFallbackFormatter:
                 latency_ms=0.5,
             )
 
-        if not tool_results:
+        if not tool_results and not existing_evidence:
             answer = "No analysis output was generated. Please verify query and image inputs."
             return SynthesisResult(
                 answer=answer,
@@ -53,6 +54,67 @@ class DeterministicFallbackFormatter:
                 synthesis_source="deterministic_fallback",
                 fallback_used=True,
                 fallback_reason=fallback_reason or "No tool results available",
+                latency_ms=0.5,
+            )
+
+        if not tool_results and existing_evidence:
+            q_lower = query.lower()
+            ev_list = existing_evidence or []
+
+            matched_items = []
+            for ev in ev_list:
+                lbl = str(ev.get("label", "")).lower()
+                fnd = str(ev.get("finding", "")).lower()
+                if any(w in q_lower for w in ["vegetation", "forest", "flora", "green"]):
+                    if any(k in lbl or k in fnd for k in ["forest", "vegetat", "pasture", "arable", "green"]):
+                        matched_items.append(ev)
+                elif any(w in q_lower for w in ["urban", "building", "structure", "built-up", "city"]):
+                    if any(k in lbl or k in fnd for k in ["urban", "building", "industrial", "commercial", "structure", "fabric"]):
+                        matched_items.append(ev)
+                elif any(w in q_lower for w in ["water", "flood", "lake", "river"]):
+                    if any(k in lbl or k in fnd for k in ["water", "marine", "inland", "flood"]):
+                        matched_items.append(ev)
+
+            if not matched_items:
+                matched_items = ev_list
+
+            ev_ids = [item.get("evidence_id") for item in matched_items if item.get("evidence_id")] or ["E1"]
+            descriptions = []
+            for item in matched_items:
+                eid = item.get("evidence_id", "E1")
+                lbl = item.get("label", "feature")
+                pct = item.get("coverage_pct")
+                if pct:
+                    descriptions.append(f"{lbl} (approximately {pct}%, {eid})")
+                elif item.get("finding"):
+                    descriptions.append(f"{item.get('finding')} ({eid})")
+                else:
+                    descriptions.append(f"{lbl} ({eid})")
+
+            desc_str = ", ".join(descriptions)
+            if "why" in q_lower or "think that" in q_lower:
+                answer = f"This assessment is grounded directly in the verified empirical evidence from the scene analysis: {desc_str}."
+                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+            elif any(w in q_lower for w in ["vegetation", "forest"]):
+                answer = f"Vegetation observations in this scene are concentrated in: {desc_str} based on verified spectral analysis."
+                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+            elif any(w in q_lower for w in ["urban", "building"]):
+                answer = f"Built-up and structural features are identified as: {desc_str} based on spatial and spectral signatures."
+                justification = f"Derived from previous evidence items: {', '.join(ev_ids)}."
+            else:
+                answer = f"Based on the retained session evidence, the identified features include: {desc_str}."
+                justification = f"Constructed from session evidence items: {', '.join(ev_ids)}."
+
+            claims = [SynthesisClaim(text=answer, evidence_ids=ev_ids)]
+            uncertainties = ["Model confidence is uncalibrated."] if confidence_status == "uncalibrated" else []
+            return SynthesisResult(
+                answer=answer,
+                claims=claims,
+                uncertainties=uncertainties,
+                justification=justification,
+                synthesis_source="deterministic_fallback",
+                fallback_used=True,
+                fallback_reason=fallback_reason or "Session context follow-up",
                 latency_ms=0.5,
             )
 
@@ -68,7 +130,10 @@ class DeterministicFallbackFormatter:
         temporal = (intent.get("temporal_scope") if intent else None)
 
         evidence_items = primary_tool.get("evidence", [])
-        evidence_ids = [f"E{i + 1}" for i in range(len(evidence_items))] or ["E1"]
+        evidence_ids = [
+            item["evidence_id"] for item in evidence_items
+            if isinstance(item, dict) and "evidence_id" in item
+        ] or [f"E{i + 1}" for i in range(len(evidence_items))] or ["E1"]
 
         # 2. Build task-specific analytical answer
         paragraphs = []

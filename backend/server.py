@@ -14,7 +14,7 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException, Request
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,14 +29,16 @@ mimetypes.add_type("text/css", ".css")
 
 try:
     from .rasterio_utils import RasterInput
-    from .agent import execute
+    from .agent import execute, execute_followup
     from .history import history_store
+    from .session import session_store
 except ImportError:
     # Running directly as uvicorn server:app inside backend/
     sys.path.append(str(Path(__file__).parent))
     from rasterio_utils import RasterInput
-    from agent import execute
+    from agent import execute, execute_followup
     from history import history_store
+    from session import session_store
 
 app = FastAPI(title="SatQuery AI", version="1.0")
 
@@ -102,15 +104,98 @@ async def get_sample(filename: str):
 # ---------------------------------------------------------------- Core SatQuery AI Analysis Endpoint
 @app.post("/api/query")
 async def query_api(
-    query: Optional[str] = Form("Analyze this satellite imagery"),
+    request: Request,
+    query: Optional[str] = Form(None),
     files: Optional[list[UploadFile]] = File(None),
     run_id: Optional[str] = Form(None),
+    session_id: Optional[str] = Form(None),
 ):
+    # Support direct JSON payload for follow-up questions
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        try:
+            body = await request.json()
+            if not query:
+                query = body.get("query")
+            if not run_id:
+                run_id = body.get("run_id")
+            if not session_id:
+                session_id = body.get("session_id")
+        except Exception:
+            pass
+
     if not run_id:
         run_id = str(uuid.uuid4())
 
     if not query or not query.strip():
         query = "Analyze this satellite imagery and describe major land-cover or surface patterns."
+
+    # -----------------------------------------------------------
+    # CASE 1: FOLLOW-UP QUERY (session_id provided and no new files uploaded)
+    # -----------------------------------------------------------
+    if session_id and (not files or len(files) == 0):
+        sess = session_store.get_session(session_id)
+        if not sess:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "error": f"Analysis session '{session_id}' not found or expired.",
+                    "detail": f"Analysis session '{session_id}' not found or expired. Please start a new analysis.",
+                    "code": "SESSION_NOT_FOUND",
+                    "session_id": session_id,
+                    "run_id": run_id,
+                },
+            )
+
+        # Create history entry in RUNNING state
+        history_store.create_entry(
+            run_id=run_id,
+            query=query,
+            image_names=sess.get("image", {}).get("filenames", []),
+            analysis_type="Follow-Up Processing...",
+            status="RUNNING",
+        )
+
+        try:
+            result = execute_followup(query, session_id=session_id, run_id=run_id)
+            if "error" in result and not result.get("answer"):
+                history_store.update_entry(
+                    run_id=run_id,
+                    status="FAILED",
+                    error=result["error"],
+                    full_result=result,
+                )
+                return result
+
+            # Update history entry to SUCCESS
+            tools_run = [o.get("tool_id", o.get("tool")) for o in result.get("outputs", [])]
+            models_used = result.get("execution_details", {}).get("models", [])
+            history_store.update_entry(
+                run_id=run_id,
+                status="SUCCESS",
+                tools_executed=tools_run,
+                models_used=models_used,
+                result_summary=result.get("answer", "")[:160] + "..." if len(result.get("answer", "")) > 160 else result.get("answer", ""),
+                full_result=result,
+                analysis_type=result.get("analysis_type", "Follow-Up Analysis"),
+            )
+            return result
+
+        except Exception as e:
+            err_msg = f"{type(e).__name__}: {e}"
+            history_store.update_entry(
+                run_id=run_id,
+                status="FAILED",
+                error=err_msg,
+                full_result={"error": err_msg, "run_id": run_id, "session_id": session_id},
+            )
+            return {"error": err_msg, "run_id": run_id, "session_id": session_id}
+
+    # -----------------------------------------------------------
+    # CASE 2: INITIAL QUERY (or starting a new session with new files)
+    # -----------------------------------------------------------
+    if not session_id:
+        session_id = run_id
 
     if not files or len(files) == 0:
         sample_path = REAL_DATA / "opt_0611.png"
@@ -139,8 +224,9 @@ async def query_api(
     )
 
     try:
-        result = execute(query, rasters, run_id=run_id)
+        result = execute(query, rasters, run_id=run_id, session_id=session_id)
         result["run_id"] = run_id
+        result["session_id"] = session_id
         if "error" in result and not result.get("answer"):
             history_store.update_entry(
                 run_id=run_id,
@@ -154,7 +240,7 @@ async def query_api(
         analysis_type = result.get("analysis_type", "Geospatial Analysis")
         tools_run = [o.get("tool_id", o.get("tool")) for o in result.get("outputs", [])]
         models_used = result.get("execution_details", {}).get("models", [])
-        
+
         history_store.update_entry(
             run_id=run_id,
             status="SUCCESS",
@@ -172,9 +258,28 @@ async def query_api(
             run_id=run_id,
             status="FAILED",
             error=err_msg,
-            full_result={"error": err_msg, "run_id": run_id},
+            full_result={"error": err_msg, "run_id": run_id, "session_id": session_id},
         )
-        return {"error": err_msg, "run_id": run_id}
+        return {"error": err_msg, "run_id": run_id, "session_id": session_id}
+
+
+# ---------------------------------------------------------------- Analysis Session Endpoints
+@app.get("/api/session/{session_id}")
+async def get_session_endpoint(session_id: str):
+    """Retrieve an active analysis session including its conversation thread and evidence."""
+    sess = session_store.get_session(session_id)
+    if not sess:
+        raise HTTPException(status_code=404, detail=f"Analysis session '{session_id}' not found")
+    return sess
+
+
+@app.delete("/api/session/{session_id}")
+async def delete_session_endpoint(session_id: str):
+    """Delete an analysis session and its cached imagery."""
+    deleted = session_store.delete_session(session_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Analysis session '{session_id}' not found")
+    return {"deleted": True, "session_id": session_id}
 
 
 # ---------------------------------------------------------------- Analysis History Endpoints

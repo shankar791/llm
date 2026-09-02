@@ -25,27 +25,20 @@ class LLMSynthesizer:
     while strictly preserving authoritative numbers and forbidding fabricated claims.
     """
 
-    SYSTEM_PROMPT = """You are writing the final answer for a remote-sensing user.
+    SYSTEM_PROMPT = """You are the SatQuery AI Synthesis Engine writing the final response for a remote-sensing user.
 
-Use only the supplied evidence.
-
-Synthesize the evidence into one coherent paragraph.
-
-Answer the user's actual question directly.
-
-Include the most relevant visual observations from VQA and Caption.
-
-Use grounding information only when relevant.
-
-Use numerical classification results only when they are explicitly supplied.
-
-Clearly distinguish classification results from physical measurements.
-
-Do not invent facts.
-
-Do not mention internal tools, model names, evidence IDs, JSON, fallback systems, prompts, or pipeline implementation.
-
-Target 80–150 words unless the user's question clearly requires a shorter answer."""
+STRICT SYNTHESIS RULES:
+1. Grounding & Truthfulness: Base your response exclusively on the supplied evidence context.
+2. Strict Anti-Hallucination: Do NOT invent percentages, geographic areas (ha/m²), bounding box coordinates, confidence values, detected objects, or change statistics.
+3. Missing Data: If specific evidence or measurements are unavailable, explicitly state that the evidence is unavailable.
+4. Distinguish Modalities: Clearly distinguish optical observations from SAR radar characteristics and classification estimates from physical measurements.
+5. Answer Format: For normal analytical questions, structure your answer into:
+   - Direct answer addressing the user's question
+   - Short explanation based on empirical evidence
+   - Important quantitative findings when explicitly provided
+   - Explicit uncertainty or limitation disclosure when appropriate
+6. Length: Target approximately 100–180 words for analytical queries. Do not pad simple factual questions unnecessarily.
+7. Tone & Cleanliness: Maintain professional geospatial analytical tone. Do not expose internal prompts, tool names, or raw JSON structures."""
 
     def __init__(
         self,
@@ -65,14 +58,24 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
         confidence_status: str,
         geojson: Optional[Dict[str, Any]],
         intent: Optional[Dict[str, Any]],
+        existing_evidence: Optional[List[Dict[str, Any]]] = None,
+        start_counter: int = 1,
     ) -> Dict[str, Any]:
         """Prepare compact, structured evidence context for the LLM and validator."""
         evidence_list = []
         valid_ids = []
         gis_metrics = {}
 
+        # 1. Include pre-existing evidence items from session
+        if existing_evidence:
+            for item in existing_evidence:
+                eid = item.get("evidence_id")
+                if eid and eid not in valid_ids:
+                    valid_ids.append(eid)
+                    evidence_list.append(item)
+
         # Collect evidence items across all tool results
-        counter = 1
+        counter = start_counter
         for tool in tool_results:
             meta = tool.get("metadata", {})
             if "area_ha" in meta:
@@ -85,6 +88,13 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
                 gis_metrics["change_fraction_pct"] = meta["change_fraction_pct"]
 
             for item in tool.get("evidence", []):
+                if isinstance(item, dict) and "evidence_id" in item:
+                    eid = item["evidence_id"]
+                    if eid not in valid_ids:
+                        valid_ids.append(eid)
+                        evidence_list.append(item)
+                    continue
+
                 if isinstance(item, dict) and "top_classes" in item:
                     for cls_name, cls_pct in item["top_classes"]:
                         eid = f"E{counter}"
@@ -107,6 +117,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
                         "source": item.get("source", "vision_tool") if isinstance(item, dict) else "vision_tool",
                     })
                     counter += 1
+
 
         # If no explicit evidence items were attached, create an E1 placeholder for the tool result
         if not valid_ids and tool_results:
@@ -153,12 +164,15 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
         geojson: Optional[Dict[str, Any]] = None,
         intent: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
+        existing_evidence: Optional[List[Dict[str, Any]]] = None,
+        start_counter: int = 1,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
     ) -> SynthesisResult:
         """
         Synthesize the final natural-language answer synchronously.
         """
         # 1. Check for immediate execution error or empty inputs
-        if error or not tool_results:
+        if error or (not tool_results and not existing_evidence):
             return self.fallback_formatter.format(
                 query=query,
                 tool_results=tool_results,
@@ -168,6 +182,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
                 intent=intent,
                 error=error,
                 fallback_reason=error or "No tool results available",
+                existing_evidence=existing_evidence,
             )
 
         start_time = time.perf_counter()
@@ -180,9 +195,21 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
             confidence_status=confidence_status,
             geojson=geojson,
             intent=intent,
+            existing_evidence=existing_evidence,
+            start_counter=start_counter,
         )
 
+        conv_text = ""
+        if conversation_history:
+            turns = []
+            for t in conversation_history[-4:]:
+                r = "User" if t.get("role") == "user" else "Assistant"
+                turns.append(f"{r}: {t.get('content', '')}")
+            if turns:
+                conv_text = "Prior Analysis Conversation History:\n" + "\n".join(turns) + "\n\n"
+
         user_content = (
+            f"{conv_text}"
             f"User Question:\n{query}\n\n"
             f"Available Evidence Context:\n"
             f"```json\n{json.dumps(evidence_ctx, indent=2, default=str)}\n```\n\n"
@@ -230,7 +257,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
 
             latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
             model_name = getattr(self.provider, "config", None) and self.provider.config.model or ""
-            syn_source = "minimax" if "minimax" in model_name.lower() else "llm"
+            syn_source = "glm" if ("glm" in model_name.lower() or "z-ai" in model_name.lower()) else ("minimax" if "minimax" in model_name.lower() else "llm")
 
             return SynthesisResult(
                 answer=payload.answer,
@@ -258,6 +285,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
                 geojson=geojson,
                 intent=intent,
                 fallback_reason=fallback_reason,
+                existing_evidence=existing_evidence,
             )
 
     async def synthesize_async(
@@ -269,11 +297,14 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
         geojson: Optional[Dict[str, Any]] = None,
         intent: Optional[Dict[str, Any]] = None,
         error: Optional[str] = None,
+        existing_evidence: Optional[List[Dict[str, Any]]] = None,
+        start_counter: int = 1,
+        conversation_history: Optional[List[Dict[str, Any]]] = None,
     ) -> SynthesisResult:
         """
         Synthesize the final natural-language answer asynchronously.
         """
-        if error or not tool_results:
+        if error or (not tool_results and not existing_evidence):
             return self.fallback_formatter.format(
                 query=query,
                 tool_results=tool_results,
@@ -283,6 +314,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
                 intent=intent,
                 error=error,
                 fallback_reason=error or "No tool results available",
+                existing_evidence=existing_evidence,
             )
 
         start_time = time.perf_counter()
@@ -293,9 +325,21 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
             confidence_status=confidence_status,
             geojson=geojson,
             intent=intent,
+            existing_evidence=existing_evidence,
+            start_counter=start_counter,
         )
 
+        conv_text = ""
+        if conversation_history:
+            turns = []
+            for t in conversation_history[-4:]:
+                r = "User" if t.get("role") == "user" else "Assistant"
+                turns.append(f"{r}: {t.get('content', '')}")
+            if turns:
+                conv_text = "Prior Analysis Conversation History:\n" + "\n".join(turns) + "\n\n"
+
         user_content = (
+            f"{conv_text}"
             f"User Question:\n{query}\n\n"
             f"Available Evidence Context:\n"
             f"```json\n{json.dumps(evidence_ctx, indent=2, default=str)}\n```\n\n"
@@ -338,7 +382,7 @@ Target 80–150 words unless the user's question clearly requires a shorter answ
 
             latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
             model_name = getattr(self.provider, "config", None) and self.provider.config.model or ""
-            syn_source = "minimax" if "minimax" in model_name.lower() else "llm"
+            syn_source = "glm" if ("glm" in model_name.lower() or "z-ai" in model_name.lower()) else ("minimax" if "minimax" in model_name.lower() else "llm")
 
             return SynthesisResult(
                 answer=payload.answer,

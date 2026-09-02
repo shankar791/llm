@@ -99,11 +99,14 @@ def tool_vqa(query: str, rasters, scenario: dict) -> dict:
         })
 
     # compose answer from top classes of first image (or fused across pair)
+    primary = results[0]["top_classes"] if results else []
     if len(results) == 1:
-        primary = results[0]["top_classes"]
         parts = [f"{k} ({v_*100:.1f}% of scene)" for k, v_ in primary]
-        answer = f"Scene analysis of '{rasters[0].filename}': dominant cover is " + ", ".join(parts) + "."
-    else:
+        if parts:
+            answer = f"Scene analysis of '{rasters[0].filename}': dominant cover is " + ", ".join(parts) + "."
+        else:
+            answer = f"Scene analysis of '{rasters[0].filename}': no dominant land-cover class detected above the confidence threshold."
+    elif len(results) >= 2:
         a = {k: v_ for k, v_ in results[0]["class_scores"].items()}
         b = {k: v_ for k, v_ in results[1]["class_scores"].items()}
         deltas = {k: round(b.get(k, 0) - a.get(k, 0), 3)
@@ -114,6 +117,8 @@ def tool_vqa(query: str, rasters, scenario: dict) -> dict:
             answer = f"Comparing both images, notable shifts: {desc}."
         else:
             answer = "The two scenes are spectrally very similar; no major land-cover shift detected."
+    else:
+        answer = "No raster data available for analysis."
 
     confidence = float(min(0.95, 0.5 + 0.08 * len(primary)))
 

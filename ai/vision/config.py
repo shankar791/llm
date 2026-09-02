@@ -119,7 +119,7 @@ class VisionConfig:
     api_key: Optional[str] = None
     geochat_base_url: str = "http://172.25.32.36:8000"
     geochat_api_key: Optional[str] = None
-    timeout: float = 45.0
+    timeout: float = 120.0
     max_retries: int = 2
 
     def __post_init__(self):
@@ -172,11 +172,11 @@ class VisionConfig:
         # Check OPENROUTER_API_KEY, fallback to VISION_API_KEY
         api_key = os.environ.get("OPENROUTER_API_KEY") or os.environ.get("VISION_API_KEY")
 
-        timeout_str = os.environ.get("VISION_TIMEOUT", "45.0")
+        timeout_str = os.environ.get("VISION_TIMEOUT", "120.0")
         try:
             timeout = float(timeout_str)
         except ValueError:
-            timeout = 45.0
+            timeout = 120.0
 
         retries_str = os.environ.get("VISION_MAX_RETRIES", "2")
         try:

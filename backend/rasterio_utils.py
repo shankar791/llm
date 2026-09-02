@@ -308,8 +308,10 @@ def validate_inputs(rasters: list[RasterInput]) -> dict:
         scenario["scenario"] = "single_image"
     elif n == 2:
         same_modality = modalities[0] == modalities[1]
-        similar_size = abs(sizes[0][0] - sizes[1][0]) < 0.25 * max(sizes[0]) and \
-                       abs(sizes[0][1] - sizes[1][1]) < 0.25 * max(sizes[1])
+        max_h = max(sizes[0][0], sizes[1][0]) or 1
+        max_w = max(sizes[0][1], sizes[1][1]) or 1
+        similar_size = (abs(sizes[0][0] - sizes[1][0]) < 0.25 * max_h and
+                        abs(sizes[0][1] - sizes[1][1]) < 0.25 * max_w)
         if same_modality and similar_size:
             scenario["scenario"] = "bi_temporal_pair"
         elif not same_modality:

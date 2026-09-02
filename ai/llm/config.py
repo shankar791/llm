@@ -15,7 +15,7 @@ except ImportError:
     pass
 
 
-DEFAULT_LLM_MODEL = "minimax/minimax-m3:free"
+DEFAULT_LLM_MODEL = "z-ai/glm-5.3"
 DEFAULT_LLM_BASE_URL = "https://openrouter.ai/api/v1"
 
 
@@ -36,8 +36,8 @@ class LLMConfig:
         model = os.environ.get("LLM_MODEL", DEFAULT_LLM_MODEL).strip()
         base_url = os.environ.get("LLM_BASE_URL", DEFAULT_LLM_BASE_URL).rstrip("/")
         
-        # Check LLM_API_KEY, fallback to OPENROUTER_API_KEY
-        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+        # Check LLM_API_KEY, TOKENROUTER_API_KEY, fallback to OPENROUTER_API_KEY
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("TOKENROUTER_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
 
         timeout_str = os.environ.get("LLM_TIMEOUT", "30.0")
         try:

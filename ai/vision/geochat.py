@@ -88,7 +88,7 @@ class GeoChatVisionProvider:
             or getattr(self.config, "geochat_api_key", None)
             or os.environ.get("GEOCHAT_API_KEY", "")
         )
-        self.timeout = timeout or getattr(self.config, "timeout", 60.0)
+        self.timeout = timeout or getattr(self.config, "timeout", 120.0)
         self._endpoint = f"{self.base_url}/chat"
 
     def analyze_image_sync(

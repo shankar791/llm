@@ -1,0 +1,227 @@
+{
+  "session_id": "f472e1f8-857d-4b67-9d9e-70854551ccb4",
+  "created_at": "2026-09-02T06:46:35.080332+00:00",
+  "updated_at": "2026-09-02T06:46:35.080332+00:00",
+  "initial_query": "Analyze scene features.",
+  "image": {
+    "image_id": "img_f472e1f8",
+    "filenames": [
+      "opt_0611.png"
+    ],
+    "modality": "optical",
+    "modalities": [
+      "optical"
+    ],
+    "metadata": {
+      "filename": "opt_0611.png",
+      "size_bytes": 1209139,
+      "width": 760,
+      "height": 651,
+      "bands": 3,
+      "format": "png",
+      "modality": "optical",
+      "sensor": "Unknown",
+      "acquisition_date": null,
+      "crs": "EPSG:4326",
+      "resolution_m": 10.0
+    },
+    "raster_paths": [
+      "C:\\Users\\Y.shankar\\satquery-ai\\backend\\data\\sessions\\f472e1f8-857d-4b67-9d9e-70854551ccb4\\rasters\\opt_0611.png"
+    ]
+  },
+  "analysis": {
+    "answer": "Satellite scene analysis reveals: Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation. The spectral classification identifies arable land as the dominant category at approximately 40.4%.",
+    "sections": [
+      {
+        "title": "Evidence",
+        "items": [
+          "E1 — Satellite scene analysis reveals: Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation. The spectral classification identifies arable land as the dominant category at approximately 40.4%."
+        ]
+      },
+      {
+        "title": "Limitations",
+        "items": [
+          "Model confidence is uncalibrated."
+        ]
+      }
+    ],
+    "claims": [
+      {
+        "text": "Satellite scene analysis reveals: Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation. The spectral classification identifies arable land as the dominant category at approximately 40.4%.",
+        "evidence_ids": [
+          "E1"
+        ]
+      }
+    ],
+    "uncertainties": [
+      "Model confidence is uncalibrated."
+    ],
+    "justification": "Constructed deterministically from specialist tool findings and GIS metrics."
+  },
+  "evidence": [
+    {
+      "evidence_id": "E1",
+      "label": "Arable land",
+      "finding": "Arable land identified at approximately 40.4% scene coverage",
+      "coverage_pct": 40.4,
+      "source": "spectral_classification",
+      "tool_id": "T1_VQA"
+    }
+  ],
+  "tool_results": [
+    {
+      "tool": "T1_VQA",
+      "tool_id": "T1_VQA",
+      "answer": "Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation.",
+      "evidence": [
+        {
+          "image_index": 0,
+          "filename": "opt_0611.png",
+          "modality": "optical",
+          "class_scores": {
+            "Arable land": 0.404,
+            "Broad-leaved forest": 0.1395,
+            "Industrial or commercial units": 0.1157,
+            "Beaches, dunes, sands": 0.103,
+            "Coniferous forest": 0.0997,
+            "Inland waters": 0.0765,
+            "Sparsely vegetated areas": 0.0241,
+            "Pastures": 0.0217,
+            "Urban fabric": 0.0107,
+            "Marine waters": 0.0051
+          },
+          "top_classes": [
+            [
+              "Arable land",
+              0.404
+            ]
+          ]
+        }
+      ],
+      "confidence": 0.58,
+      "metadata": {
+        "model": "Deterministic Mock / Simulator",
+        "checkpoint": "MBZUAI/geochat-7B",
+        "mode": "mock",
+        "is_mock": true,
+        "mock": true,
+        "task": "vqa",
+        "query": "Analyze scene features.",
+        "raw_output": "Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation.",
+        "image_dimensions": [
+          760,
+          651
+        ],
+        "multimodal_inputs": {
+          "multimodal_injected": false
+        },
+        "latency_ms": 0.0,
+        "provider": "synthetic",
+        "active_tier": "synthetic",
+        "attempted_tiers": [
+          "synthetic"
+        ],
+        "tier_journey": [
+          {
+            "tier": 3,
+            "provider": "synthetic",
+            "model": "Deterministic Mock",
+            "status": "success",
+            "detail": "Direct mock execution"
+          }
+        ],
+        "fallback_used": false,
+        "fallback_reason": null
+      }
+    }
+  ],
+  "conversation": [
+    {
+      "role": "user",
+      "content": "Analyze scene features.",
+      "timestamp": "2026-09-02T06:46:35.080332+00:00"
+    },
+    {
+      "role": "assistant",
+      "content": "Satellite scene analysis reveals: Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation. The spectral classification identifies arable land as the dominant category at approximately 40.4%.",
+      "timestamp": "2026-09-02T06:46:35.080332+00:00",
+      "claims": [
+        {
+          "text": "Satellite scene analysis reveals: Visual analysis regarding 'Analyze scene features.': Scene exhibits high-density mixed terrain with planned infrastructure and natural vegetation. The spectral classification identifies arable land as the dominant category at approximately 40.4%.",
+          "evidence_ids": [
+            "E1"
+          ]
+        }
+      ],
+      "evidence_ids": [
+        "E1"
+      ]
+    }
+  ],
+  "execution_metadata": {
+    "intent": {
+      "task": "vqa",
+      "workflow": [
+        "T1_VQA"
+      ],
+      "model": "Keyword & Structural Intent Classifier",
+      "source": "Local",
+      "status": "SUCCESS"
+    },
+    "models": [
+      {
+        "task": "Intent Classification",
+        "requested_model": "Keyword & Structural Intent Classifier",
+        "actual_model": "Keyword & Structural Intent Classifier",
+        "provider": "SatQuery Local Engine",
+        "source": "Local",
+        "status": "SUCCESS",
+        "latency_ms": 1,
+        "fallback_used": false,
+        "fallback_reason": null
+      },
+      {
+        "task": "T1_VQA",
+        "requested_model": "GeoChat-7B / OpenRouter VLM",
+        "actual_model": "Deterministic Mock / Simulator",
+        "provider": "SatQuery Spectral Baseline",
+        "source": "Synthetic / Deterministic",
+        "status": "SUCCESS",
+        "latency_ms": 0.0,
+        "fallback_used": false,
+        "fallback_reason": null,
+        "tier_journey": [
+          {
+            "tier": 3,
+            "provider": "synthetic",
+            "model": "Deterministic Mock",
+            "status": "success",
+            "detail": "Direct mock execution"
+          }
+        ]
+      },
+      {
+        "task": "Final Synthesis",
+        "requested_model": "z-ai/glm-5.3",
+        "actual_model": "Deterministic Fallback Formatter",
+        "provider": "OpenRouter / Z.ai",
+        "source": "Synthetic / Deterministic",
+        "status": "SUCCESS (FALLBACK)",
+        "latency_ms": 28,
+        "fallback_used": true,
+        "fallback_reason": null
+      }
+    ],
+    "geochat_status": {
+      "available": true,
+      "used_in_this_analysis": false,
+      "detail": "GeoChat available in codebase but not active in this run (cascade routed to OpenRouter/Synthetic)"
+    },
+    "confidence_info": {
+      "value": 0.58,
+      "status": "uncalibrated",
+      "source": "Minimum specialist tool confidence",
+      "calculation": "min([0.58]) over 1 specialist tool(s)"
+    }
+  }
+}
