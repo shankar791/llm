@@ -137,13 +137,21 @@ def test_mocked_execution_event_failure_handling():
 # ======================================================================
 
 def test_fastapi_index_endpoint_serves_html():
-    """Verify GET / returns HTTP 200 with text/html containing the live monitor UI."""
+    """Verify GET / returns HTTP 200 with text/html containing the 3D SatQuery UI, and /monitor contains live monitor UI."""
     client = TestClient(app)
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
     assert "SatQuery AI" in response.text
-    assert "Live Execution Pipeline Timeline" in response.text
+
+    response_mission = client.get("/mission")
+    assert response_mission.status_code == 200
+    assert "SatQuery AI" in response_mission.text
+
+    response_monitor = client.get("/monitor")
+    assert response_monitor.status_code == 200
+    assert "SatQuery AI" in response_monitor.text
+    assert "Live Execution Pipeline Timeline" in response_monitor.text
 
 
 def test_fastapi_query_api_single_image_execution():

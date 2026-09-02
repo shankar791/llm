@@ -127,8 +127,31 @@ def tool_vqa(query: str, rasters, scenario: dict) -> dict:
         if vlm_res and vlm_res.get("answer"):
             answer = vlm_res["answer"]
             vlm_meta = vlm_res.get("metadata", {})
-    except Exception:
-        pass
+    except Exception as e:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "BigEarthNet Spectral Classifier",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "BigEarthNet Spectral Classifier", "status": "success", "detail": f"Deterministic spectral baseline ({type(e).__name__})"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": f"Synthetic spectral signature analysis ({type(e).__name__})",
+        }
+
+    if not vlm_meta:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "BigEarthNet Spectral Classifier",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "BigEarthNet Spectral Classifier", "status": "success", "detail": "Deterministic spectral signature analysis"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": "Deterministic spectral signature analysis",
+        }
 
     return {
         "tool": "T1_VQA",
@@ -182,8 +205,31 @@ def tool_caption(raster: RasterInputLike, scenario: dict) -> dict:
         if vlm_res and vlm_res.get("answer"):
             description = vlm_res["answer"]
             vlm_meta = vlm_res.get("metadata", {})
-    except Exception:
-        pass
+    except Exception as e:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "Rule-Based Spectral Captioner",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Rule-Based Spectral Captioner", "status": "success", "detail": f"Deterministic spectral scene analysis ({type(e).__name__})"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": f"Synthetic scene description ({type(e).__name__})",
+        }
+
+    if not vlm_meta:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "Rule-Based Spectral Captioner",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Rule-Based Spectral Captioner", "status": "success", "detail": "Deterministic spectral scene analysis"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": "Deterministic spectral scene analysis",
+        }
 
     return {
         "tool": "T2_Caption",
@@ -249,25 +295,51 @@ def tool_ground(query: str, raster, scenario: dict) -> dict:
     answer = f"Grounded regions matching your query — {labels_txt}. Bounding boxes overlaid."
 
     # Attempt real multimodal VLM grounding if vision provider is available
+    vlm_meta = {}
     try:
         from tools.grounding import GroundingTool
         gnd_tool = GroundingTool(mode="real")
         img_input = raster.thumbnail(768) if hasattr(raster, "thumbnail") else raster
         vlm_res = gnd_tool.run(query=query, image_bytes=img_input, mode="real")
-        if vlm_res and vlm_res.get("evidence"):
-            return {
-                "tool": "T3_Ground",
-                "tool_id": "T3_Ground",
-                "answer": vlm_res.get("answer", answer),
-                "evidence": vlm_res.get("evidence", []),
-                "evidence_image_b64": vlm_res.get("evidence_image_b64") or _b64_png(out),
-                "evidence_path": ev_path,
-                "regions": found,
-                "confidence": vlm_res.get("confidence", 0.78),
-                "metadata": vlm_res.get("metadata", {}),
-            }
-    except Exception:
-        pass
+        if vlm_res:
+            vlm_meta = vlm_res.get("metadata", {})
+            if vlm_res.get("evidence"):
+                return {
+                    "tool": "T3_Ground",
+                    "tool_id": "T3_Ground",
+                    "answer": vlm_res.get("answer", answer),
+                    "evidence": vlm_res.get("evidence", []),
+                    "evidence_image_b64": vlm_res.get("evidence_image_b64") or _b64_png(out),
+                    "evidence_path": ev_path,
+                    "regions": found,
+                    "confidence": vlm_res.get("confidence", 0.78),
+                    "metadata": vlm_meta,
+                }
+    except Exception as e:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "Rule-Based Spectral Grounder",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Rule-Based Spectral Grounder", "status": "success", "detail": f"Deterministic heuristic bbox grounding ({type(e).__name__})"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": f"Synthetic heuristic grounding ({type(e).__name__})",
+        }
+
+    if not vlm_meta:
+        vlm_meta = {
+            "provider": "synthetic",
+            "model": "Rule-Based Spectral Grounder",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Rule-Based Spectral Grounder", "status": "success", "detail": "Deterministic heuristic bbox grounding"}
+            ],
+            "fallback_used": True,
+            "fallback_reason": "Deterministic heuristic bbox grounding",
+        }
 
     return {
         "tool": "T3_Ground",
@@ -277,6 +349,7 @@ def tool_ground(query: str, raster, scenario: dict) -> dict:
         "evidence_path": ev_path,
         "regions": found,
         "confidence": 0.78,
+        "metadata": vlm_meta,
     }
 
 
@@ -350,12 +423,28 @@ def tool_change(r1, r2, scenario: dict) -> dict:
     answer = (f"Change analysis between '{r1.filename}' and '{r2.filename}': "
               f"{frac*100:.1f}% of the scene changed (severity: {severity}). "
               f"{len(boxes)} distinct changed region(s) highlighted.")
-    return {"tool": "T4_Change", "answer": answer,
-            "change_fraction": round(frac, 4), "severity": severity,
-            "n_regions": len(boxes),
-            "evidence_image_b64": _b64_png(out),
-            "evidence_path": _save_evidence(out, "change.png"),
-            "confidence": 0.82}
+    return {
+        "tool": "T4_Change",
+        "tool_id": "T4_Change",
+        "answer": answer,
+        "change_fraction": round(frac, 4),
+        "severity": severity,
+        "n_regions": len(boxes),
+        "evidence_image_b64": _b64_png(out),
+        "evidence_path": _save_evidence(out, "change.png"),
+        "confidence": 0.82,
+        "metadata": {
+            "provider": "synthetic",
+            "model": "Bi-Temporal Change Engine",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Bi-Temporal Change Engine", "status": "success", "detail": "Deterministic pixel-level change difference"}
+            ],
+            "fallback_used": False,
+            "fallback_reason": None,
+        },
+    }
 
 
 # ---------------------------------------------------------------- T5 optical-SAR fusion
@@ -400,10 +489,26 @@ def tool_optical_sar(r_optical, r_sar, scenario: dict) -> dict:
               ", ".join(f"{k} ~{v_}% of scene" for k, v_ in stats.items()) +
               ". SAR texture confirmed structural targets where optical was ambiguous "
               "(cloud/shadow robust). Class overlays rendered.")
-    return {"tool": "T5_OpticalSAR", "answer": answer, "stats_pct": stats,
-            "evidence_image_b64": _b64_png(out),
-            "evidence_path": _save_evidence(out, "fusion.png"),
-            "confidence": 0.75}
+    return {
+        "tool": "T5_OpticalSAR",
+        "tool_id": "T5_OpticalSAR",
+        "answer": answer,
+        "stats_pct": stats,
+        "evidence_image_b64": _b64_png(out),
+        "evidence_path": _save_evidence(out, "fusion.png"),
+        "confidence": 0.75,
+        "metadata": {
+            "provider": "synthetic",
+            "model": "Optical-SAR Fusion Engine",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["synthetic"],
+            "tier_journey": [
+                {"tier": 3, "provider": "synthetic", "model": "Optical-SAR Fusion Engine", "status": "success", "detail": "Cross-modal texture & spectral fusion"}
+            ],
+            "fallback_used": False,
+            "fallback_reason": None,
+        },
+    }
 
 
 def _box_blur(x: np.ndarray, k: int) -> np.ndarray:

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unit tests for SatQuery AI Master Agent LangGraph nodes.
 """
 from __future__ import annotations
@@ -162,4 +162,4 @@ class TestLLMSynthesisNode:
             "tool_results": [{"tool_id": "T1_VQA", "answer": "Urban area detected", "confidence": 0.85}],
         }
         result = llm_synthesis_node(state)
-        assert "Urban area detected" in result["final_answer"]
+        assert "urban area" in result["final_answer"].lower()

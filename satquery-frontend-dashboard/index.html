@@ -1,0 +1,2367 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SatQuery AI — Earth Intelligence</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            blue: '#3b82f6',
+                            royal: '#4f46e5',
+                            accent: '#4361ee'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'system-ui', '-apple-system', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts: Plus Jakarta Sans & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+            user-select: none;
+            display: flex;
+            padding: 12px;
+            gap: 12px;
+            transition: background 0.3s ease;
+        }
+
+        /* OPPOSITE BACKGROUND LIGHTING */
+        html:not(.dark) body {
+            background-color: #080e1a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(30, 58, 138, 0.75) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(15, 23, 42, 0.95) 0px, transparent 60%),
+                radial-gradient(at 50% 50%, rgba(2, 6, 23, 0.95) 0px, transparent 100%);
+            color: #1e293b;
+        }
+
+        html.dark body {
+            background-color: #e2e8f0;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(219, 234, 254, 0.95) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(224, 231, 255, 0.9) 0px, transparent 60%),
+                radial-gradient(at 50% 50%, rgba(241, 245, 249, 0.98) 0px, transparent 100%);
+            color: #f1f5f9;
+        }
+
+        /* Scaled-Up Semi-Transparent Background Wallpaper */
+        #bg-map-wallpaper {
+            position: fixed;
+            inset: 0;
+            background-image: url('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/16/29165/47102');
+            background-size: cover;
+            background-position: center;
+            filter: brightness(1.05) contrast(0.85) saturate(0.9) blur(6px);
+            opacity: 0.35;
+            z-index: 0;
+            pointer-events: none;
+            transition: all 0.4s ease;
+        }
+
+        html.dark #bg-map-wallpaper {
+            filter: brightness(0.65) contrast(1.1) saturate(0.9) blur(6px);
+            opacity: 0.28;
+        }
+
+        /* TRUE LIQUID GLASSMORPHISM */
+        .true-glass {
+            backdrop-filter: blur(40px) saturate(190%);
+            -webkit-backdrop-filter: blur(40px) saturate(190%);
+            border-radius: 28px;
+            transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        html:not(.dark) .true-glass {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.65) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 
+                inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.9),
+                0 25px 50px -12px rgba(0, 0, 0, 0.35),
+                0 0 0 1px rgba(255, 255, 255, 0.4);
+        }
+
+        html.dark .true-glass {
+            background: linear-gradient(135deg, rgba(15, 23, 42, 0.88) 0%, rgba(10, 15, 30, 0.78) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 
+                inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.2),
+                0 25px 50px -12px rgba(0, 0, 0, 0.45),
+                0 0 0 1px rgba(255, 255, 255, 0.06);
+        }
+
+        .glass-sub-card {
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            transition: background 0.2s ease, border-color 0.2s ease;
+        }
+
+        html:not(.dark) .glass-sub-card {
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.95);
+            box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.8), 0 8px 20px -4px rgba(0, 0, 0, 0.06);
+        }
+
+        html.dark .glass-sub-card {
+            background: rgba(30, 41, 59, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.1), 0 8px 20px -4px rgba(0, 0, 0, 0.3);
+        }
+
+        /* FIXED ROCK-SOLID SIDEBAR */
+        #main-sidebar {
+            width: 220px;
+            min-width: 220px;
+            max-width: 220px;
+            flex-shrink: 0;
+            z-index: 20;
+        }
+
+        /* RESIZER DIVIDER */
+        #resizer-bar {
+            width: 12px;
+            cursor: col-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 40;
+            user-select: none;
+            touch-action: none;
+            flex-shrink: 0;
+        }
+
+        #resizer-handle {
+            width: 4px;
+            height: 52px;
+            border-radius: 9999px;
+            background: rgba(148, 163, 184, 0.6);
+            transition: all 0.2s ease;
+        }
+
+        #resizer-bar:hover #resizer-handle,
+        #resizer-bar.dragging #resizer-handle {
+            width: 6px;
+            height: 72px;
+            background: #3b82f6;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+        }
+
+        /* PERFECT GLASS PILL THEME SWITCH */
+        .perfect-theme-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 3px;
+            width: 72px;
+            height: 32px;
+            border-radius: 9999px;
+            cursor: pointer;
+            position: relative;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+
+        html:not(.dark) .perfect-theme-toggle {
+            background: rgba(226, 232, 240, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.95);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+        }
+
+        html.dark .perfect-theme-toggle {
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+        }
+
+        .toggle-icon-holder {
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            z-index: 5;
+        }
+
+        .perfect-thumb {
+            position: absolute;
+            top: 2px;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+
+        html:not(.dark) .perfect-thumb {
+            left: calc(100% - 28px);
+            background: #ffffff;
+            color: #f59e0b;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+        }
+
+        html.dark .perfect-thumb {
+            left: 2px;
+            background: #334155;
+            color: #60a5fa;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+        }
+
+        .custom-scroll::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.35);
+            border-radius: 9999px;
+        }
+
+        .leaflet-container {
+            border-radius: 28px !important;
+            font-family: inherit !important;
+        }
+
+        /* Split Swipe Drag Line Inside Map Only */
+        #split-divider-line {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: #ffffff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.6);
+            z-index: 600;
+            cursor: ew-resize;
+            display: none;
+            touch-action: none;
+        }
+
+        #split-divider-handle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #3b82f6;
+            cursor: ew-resize;
+            pointer-events: auto;
+            border: 2px solid #3b82f6;
+        }
+
+        .split-badge-left {
+            position: absolute;
+            top: 70px;
+            left: 16px;
+            z-index: 500;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(15, 23, 42, 0.85);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            backdrop-filter: blur(8px);
+            display: none;
+        }
+        .split-badge-right {
+            position: absolute;
+            top: 70px;
+            right: 16px;
+            z-index: 500;
+            padding: 4px 10px;
+            border-radius: 12px;
+            background: rgba(37, 99, 235, 0.9);
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            backdrop-filter: blur(8px);
+            display: none;
+        }
+    
+        
+        /* ------------------------------------------------------------- */
+        /* Dynamic Island Floating Input Bar (Adaptive Dark & White)     */
+        /* ------------------------------------------------------------- */
+        
+        /* 1. LIGHT / WHITE THEME */
+        html:not(.dark) .dynamic-island-pill {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.98) 100%);
+            border: 1px solid rgba(203, 213, 225, 0.8);
+            box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.1), 0 4px 12px -2px rgba(15, 23, 42, 0.04), inset 0 1px 2px 0 #ffffff;
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 9999px;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        html:not(.dark) .dynamic-island-pill input {
+            color: #0f172a !important;
+        }
+
+        html:not(.dark) .dynamic-island-pill input::placeholder {
+            color: #64748b !important;
+        }
+
+        html:not(.dark) .dynamic-island-pill button {
+            color: #475569 !important;
+        }
+
+        html:not(.dark) .dynamic-island-pill button:hover {
+            color: #0f172a !important;
+            background: rgba(0, 0, 0, 0.06);
+        }
+
+        html:not(.dark) .dynamic-island-pill:focus-within {
+            border-color: rgba(59, 130, 246, 0.65);
+            box-shadow: 0 20px 45px -8px rgba(59, 130, 246, 0.22), 0 0 0 1.5px rgba(59, 130, 246, 0.4), inset 0 1px 2px 0 #ffffff;
+        }
+
+        html:not(.dark) .dynamic-circle-btn {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(241, 245, 249, 0.98) 100%);
+            border: 1px solid rgba(203, 213, 225, 0.8);
+            box-shadow: 0 16px 36px -8px rgba(15, 23, 42, 0.1), inset 0 1px 2px 0 #ffffff;
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 9999px;
+            color: #475569 !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        html:not(.dark) .dynamic-circle-btn:hover {
+            background: #ffffff;
+            color: #0f172a !important;
+            box-shadow: 0 20px 40px -6px rgba(15, 23, 42, 0.16);
+            transform: scale(1.05);
+        }
+
+        /* 2. DARK THEME */
+        html.dark .dynamic-island-pill {
+            background: linear-gradient(180deg, rgba(38, 42, 50, 0.95) 0%, rgba(16, 18, 24, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.75), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 9999px;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        html.dark .dynamic-island-pill input {
+            color: #ffffff !important;
+        }
+
+        html.dark .dynamic-island-pill input::placeholder {
+            color: #94a3b8 !important;
+        }
+
+        html.dark .dynamic-island-pill button {
+            color: #cbd5e1 !important;
+        }
+
+        html.dark .dynamic-island-pill button:hover {
+            color: #ffffff !important;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        html.dark .dynamic-island-pill:focus-within {
+            border-color: rgba(96, 165, 250, 0.6);
+            box-shadow: 0 20px 45px -8px rgba(0, 0, 0, 0.85), 0 0 0 1.5px rgba(96, 165, 250, 0.35), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.3);
+        }
+
+        html.dark .dynamic-circle-btn {
+            background: linear-gradient(180deg, rgba(38, 42, 50, 0.95) 0%, rgba(16, 18, 24, 0.98) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.75), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border-radius: 9999px;
+            color: #94a3b8 !important;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        html.dark .dynamic-circle-btn:hover {
+            background: linear-gradient(180deg, rgba(50, 56, 68, 0.98) 0%, rgba(24, 27, 36, 1) 100%);
+            border-color: rgba(255, 255, 255, 0.3);
+            color: #ffffff !important;
+            transform: scale(1.05);
+        }
+
+        /* 3. REFINED ATTACHMENT DRAWER THEMES */
+        html:not(.dark) #attachment-drawer {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+        }
+
+        html.dark #attachment-drawer {
+            background: rgba(15, 23, 42, 0.92);
+            border: 1px solid rgba(51, 65, 85, 0.8);
+            box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.6);
+        }
+
+        html:not(.dark) .upload-slot-label {
+            background: rgba(248, 250, 252, 0.85);
+            border-color: #cbd5e1;
+        }
+        html:not(.dark) .upload-slot-label:hover {
+            background: rgba(239, 246, 255, 0.9);
+            border-color: #3b82f6;
+        }
+
+        html.dark .upload-slot-label {
+            background: rgba(30, 41, 59, 0.5);
+            border-color: #334155;
+        }
+        html.dark .upload-slot-label:hover {
+            background: rgba(30, 41, 59, 0.85);
+            border-color: #60a5fa;
+        }
+
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden">
+
+    <!-- Background Wallpaper -->
+    <div id="bg-map-wallpaper"></div>
+
+    <!-- ==================================================================== -->
+    <!-- 1. LEFT SIDEBAR: Solid, No-Leak Container, Clean Switch, Nav Links   -->
+    <!-- ==================================================================== -->
+    <aside id="main-sidebar" class="true-glass flex flex-col justify-between p-5">
+        
+        <!-- Top Group -->
+        <div class="space-y-4">
+            
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-blue-400 via-indigo-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 flex-shrink-0">
+                    <i data-lucide="sparkle" class="w-5 h-5 text-white"></i>
+                </div>
+                <div class="truncate">
+                    <h1 class="text-sm font-bold text-slate-900 dark:text-white leading-tight">SatQuery AI</h1>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-medium">Earth Intelligence</p>
+                </div>
+            </div>
+
+            <!-- Perfect Glass Theme Switch -->
+            <div class="pt-0.5 flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-600 dark:text-slate-300">Theme</span>
+                <div id="theme-switch" class="perfect-theme-toggle" title="Toggle Theme">
+                    <div class="toggle-icon-holder text-blue-400"><i data-lucide="moon" class="w-3.5 h-3.5"></i></div>
+                    <div class="toggle-icon-holder text-amber-500"><i data-lucide="sun" class="w-3.5 h-3.5"></i></div>
+                    <div class="perfect-thumb">
+                        <i id="theme-thumb-icon" data-lucide="moon" class="w-3.5 h-3.5"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nav Links -->
+            <nav class="space-y-1 pt-1.5" id="sidebar-nav">
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-semibold bg-[#edf4ff] dark:bg-blue-900/35 text-[#3b82f6] dark:text-blue-400 transition-all text-left shadow-sm" data-view="dashboard">
+                    <i data-lucide="home" class="w-4 h-4"></i>
+                    <span>Dashboard</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="map-explorer">
+                    <i data-lucide="globe" class="w-4 h-4"></i>
+                    <span>Map Overview</span>
+                    <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold">Full</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="analyses">
+                    <i data-lucide="layers" class="w-4 h-4"></i>
+                    <span>Analyses</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="datasets">
+                    <i data-lucide="database" class="w-4 h-4"></i>
+                    <span>Datasets</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="projects">
+                    <i data-lucide="folder" class="w-4 h-4"></i>
+                    <span>Projects</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="reports">
+                    <i data-lucide="trending-up" class="w-4 h-4"></i>
+                    <span>Reports</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="alerts">
+                    <i data-lucide="bell" class="w-4 h-4"></i>
+                    <span>Alerts</span>
+                    <span class="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 font-bold">2</span>
+                </button>
+
+                <button class="nav-btn w-full flex items-center gap-3 px-3.5 py-2.5 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left" data-view="shared">
+                    <i data-lucide="users" class="w-4 h-4"></i>
+                    <span>Shared</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Bottom Menu & Profile (Prakash) -->
+        <div class="space-y-3 pt-2">
+                <a href="/" class="w-full flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-semibold text-blue-600 dark:text-blue-400 bg-blue-50/80 dark:bg-blue-900/30 border border-blue-200/60 dark:border-blue-700/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-all text-left">
+                    <i data-lucide="orbit" class="w-4 h-4"></i>
+                    <span>3D Orbit View</span>
+                </a>
+
+                <button id="btn-open-settings" class="w-full flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    <span>Settings</span>
+                </button>
+
+                <button id="btn-open-help" class="w-full flex items-center gap-3 px-3.5 py-2 rounded-2xl text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/40 transition-all text-left">
+                    <i data-lucide="help-circle" class="w-4 h-4"></i>
+                    <span>Help & Guide</span>
+                </button>
+
+            <!-- Profile Badge: Prakash -->
+            <div class="flex items-center justify-between p-2 rounded-2xl bg-white/70 dark:bg-slate-800/60 border border-white/80 dark:border-slate-700/60 shadow-sm">
+                <div class="flex items-center gap-2.5 min-w-0">
+                    <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center font-bold text-xs shadow-md">
+                        P
+                    </div>
+                    <div class="truncate">
+                        <p class="text-xs font-bold text-slate-900 dark:text-white truncate">Prakash</p>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">Lead Analyst</p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 mr-1"></i>
+            </div>
+        </div>
+    </aside>
+
+    <!-- ==================================================================== -->
+    <!-- 2. CENTER WORKSPACE: History, Multi-turn Chat & Multimodal Mode Hub  -->
+    <!-- ==================================================================== -->
+    <main id="chat-pane" class="true-glass flex flex-col justify-between p-6 relative overflow-hidden z-10" style="flex: 1.2; min-width: 320px;">
+        
+        <!-- View Container 1: Dashboard View (Default) -->
+        <div id="view-dashboard" class="tab-view flex-1 flex flex-col justify-between h-full">
+            
+            <!-- Top History Bar & + New Chat -->
+            <div class="flex items-center justify-between gap-3 pb-4 border-b border-slate-200/60 dark:border-slate-800/70 relative z-30 flex-shrink-0">
+                
+                <!-- History Storing Rectangle -->
+                <div class="relative flex-1">
+                    <button id="history-box" class="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl glass-sub-card hover:border-blue-400/60 transition-all text-left">
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <i data-lucide="clock" class="w-4 h-4 text-blue-500 flex-shrink-0"></i>
+                            <span id="active-session-text" class="text-xs font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                Vignan University Campus Expansion & Vegetation Survey (2023–2025)
+                            </span>
+                        </div>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-2 transition-transform duration-200" id="history-chevron"></i>
+                    </button>
+
+                    <!-- History Dropdown Menu -->
+                    <div id="history-dropdown" class="hidden absolute top-full left-0 right-0 mt-2 p-3 rounded-2xl true-glass bg-white/98 dark:bg-slate-900/98 border border-white/80 dark:border-slate-700 shadow-2xl backdrop-blur-2xl z-50 space-y-2">
+                        <div class="p-1">
+                            <div class="relative">
+                                <i data-lucide="search" class="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400"></i>
+                                <input type="text" id="history-filter" placeholder="Search past sessions..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 text-xs text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 focus:outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto custom-scroll space-y-1 text-xs" id="history-items">
+                            <!-- Items populated dynamically or mapped via data-session-id -->
+                            <div class="history-item p-2.5 rounded-xl bg-blue-50/80 dark:bg-blue-900/40 cursor-pointer flex items-center justify-between transition-colors" data-session-id="vignan">
+                                <div>
+                                    <p class="font-semibold text-slate-800 dark:text-slate-200">Vignan University Campus Expansion</p>
+                                    <p class="text-[10px] text-slate-400">Hyderabad AOI • ChangeFormer T4</p>
+                                </div>
+                                <span class="badge-status text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 font-semibold">Active</span>
+                            </div>
+                            <div class="history-item p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between transition-colors" data-session-id="hussain_sagar">
+                                <div>
+                                    <p class="font-semibold text-slate-800 dark:text-slate-200">Hussain Sagar Algal Bloom Assessment</p>
+                                    <p class="text-[10px] text-slate-400">Sentinel-2 Multi-band • Apr 2025</p>
+                                </div>
+                                <span class="badge-status text-[10px] text-slate-400">2d ago</span>
+                            </div>
+                            <div class="history-item p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between transition-colors" data-session-id="mangrove">
+                                <div>
+                                    <p class="font-semibold text-slate-800 dark:text-slate-200">East Coast Mangrove Canopy Density</p>
+                                    <p class="text-[10px] text-slate-400">SAR VV/VH Dual-Pol • Mar 2025</p>
+                                </div>
+                                <span class="badge-status text-[10px] text-slate-400">5d ago</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- + New Chat Button -->
+                <button id="btn-new-chat" class="flex items-center gap-1.5 px-4 py-2.5 rounded-2xl glass-sub-card hover:bg-white dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-semibold shadow-sm transition-all flex-shrink-0">
+                    <i data-lucide="plus" class="w-3.5 h-3.5 text-blue-500"></i>
+                    <span>New Chat</span>
+                </button>
+            </div>
+
+            <!-- Scrollable Context Window -->
+            <div id="chat-stream" class="flex-1 overflow-y-auto custom-scroll py-4 space-y-5 pr-1">
+                <!-- Content will be rendered dynamically based on active session -->
+            </div>
+
+            <!-- ================================================================ -->
+            <!-- DYNAMIC MULTIMODAL ATTACHMENT & INPUT INTERFACE                  -->
+            <!-- ================================================================ -->
+            <div class="pt-3 flex-shrink-0 relative space-y-2">
+                
+                <!-- DYNAMIC ATTACHMENT DRAWER -->
+                <div id="attachment-drawer" class="p-3 rounded-2xl glass-sub-card border border-white/80 dark:border-slate-700/80 shadow-sm space-y-2.5">
+                    
+                    <div class="flex items-center justify-between">
+                        <!-- Mode Selector Dropdown Button -->
+                        <div class="relative">
+                            <button id="btn-mode-dropdown" class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs font-bold hover:bg-blue-100 transition-all">
+                                <i id="mode-active-icon" data-lucide="image" class="w-3.5 h-3.5"></i>
+                                <span id="mode-active-title">Single Optical</span>
+                                <i data-lucide="chevron-down" class="w-3 h-3 text-blue-400 ml-1"></i>
+                            </button>
+
+                            <!-- Mode Dropdown Menu (Single / Multi / SAR) -->
+                            <div id="mode-menu" class="hidden absolute bottom-full left-0 mb-2 p-2 rounded-2xl true-glass bg-white/98 dark:bg-slate-900/98 border border-white/80 dark:border-slate-700 shadow-2xl backdrop-blur-2xl z-50 w-72 space-y-1">
+                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="single" data-title="Single Optical" data-icon="image">
+                                    <div class="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center mt-0.5"><i data-lucide="image" class="w-3.5 h-3.5"></i></div>
+                                    <div>
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Single Optical Image</p>
+                                        <p class="text-[10px] text-slate-500">1 image (.jpeg, .jpg, .png, .geotiff)</p>
+                                    </div>
+                                </div>
+                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="multi" data-title="Multi-Temporal Pair" data-icon="copy">
+                                    <div class="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center mt-0.5"><i data-lucide="copy" class="w-3.5 h-3.5"></i></div>
+                                    <div>
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Multi-Image Pair (T1 & T2)</p>
+                                        <p class="text-[10px] text-slate-500">Dual pre/post rasters for ChangeFormer</p>
+                                    </div>
+                                </div>
+                                <div class="mode-option p-2.5 rounded-xl hover:bg-blue-50 dark:hover:bg-slate-800 cursor-pointer flex items-start gap-3 transition-colors" data-mode="sar" data-title="Sentinel-1 SAR Radar" data-icon="radio">
+                                    <div class="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center mt-0.5"><i data-lucide="radio" class="w-3.5 h-3.5"></i></div>
+                                    <div>
+                                        <p class="font-bold text-xs text-slate-900 dark:text-white">Sentinel-1 SAR Options</p>
+                                        <p class="text-[10px] text-slate-500">Dual-pol VV / VH amplitude radar</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <span class="text-[10px] text-slate-500 dark:text-slate-400 font-medium" id="format-hint">Accepts: JPEG, JPG, PNG, GeoTIFF (Max 50MB)</span>
+                    </div>
+
+                    <!-- MODE 1: Single Image Slot -->
+                    <div id="slot-single" class="mode-slot block">
+                        <label for="input-file-single" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-3 flex items-center justify-between transition-all">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center"><i data-lucide="upload-cloud" class="w-4 h-4"></i></div>
+                                <div>
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200" id="label-file-single">Upload Optical Satellite Raster</p>
+                                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Click or drag & drop .png, .jpg, .jpeg, .tif, .geotiff</p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-[10px] font-bold text-slate-700 dark:text-slate-200 shadow-sm">Browse</span>
+                            <input type="file" id="input-file-single" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                        </label>
+                    </div>
+
+                    <!-- MODE 2: Multi-Image Dual Slots -->
+                    <div id="slot-multi" class="mode-slot hidden grid grid-cols-2 gap-2">
+                        <label for="input-file-t1" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-emerald-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                            <i data-lucide="calendar" class="w-4 h-4 text-emerald-500 flex-shrink-0"></i>
+                            <div class="truncate">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t1">T1 Baseline Image</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400">e.g. May 2023 GeoTIFF</p>
+                            </div>
+                            <input type="file" id="input-file-t1" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                        </label>
+
+                        <label for="input-file-t2" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-blue-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                            <i data-lucide="calendar" class="w-4 h-4 text-blue-500 flex-shrink-0"></i>
+                            <div class="truncate">
+                                <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-t2">T2 Target Image</p>
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400">e.g. May 2025 GeoTIFF</p>
+                            </div>
+                            <input type="file" id="input-file-t2" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                        </label>
+                    </div>
+
+                    <!-- MODE 3: SAR Dual-Pol Radar -->
+                    <div id="slot-sar" class="mode-slot hidden space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <label for="input-file-vv" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-purple-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                                <i data-lucide="radio" class="w-4 h-4 text-purple-500 flex-shrink-0"></i>
+                                <div class="truncate">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vv">VV Co-Pol Amplitude</p>
+                                    <p class="text-[9px] text-slate-500 dark:text-slate-400">Vertical-Vertical SAR</p>
+                                </div>
+                                <input type="file" id="input-file-vv" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                            </label>
+
+                            <label for="input-file-vh" class="upload-slot-label cursor-pointer border-2 border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/40 hover:border-purple-500 rounded-xl p-2.5 flex items-center gap-2 transition-all">
+                                <i data-lucide="radio" class="w-4 h-4 text-purple-500 flex-shrink-0"></i>
+                                <div class="truncate">
+                                    <p class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate" id="label-vh">VH Cross-Pol Amplitude</p>
+                                    <p class="text-[9px] text-slate-500 dark:text-slate-400">Vertical-Horizontal SAR</p>
+                                </div>
+                                <input type="file" id="input-file-vh" class="hidden" accept=".jpg,.jpeg,.png,.tif,.tiff,.geotiff">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chat Input Dock (Floating Dynamic Island Pill) -->
+                <div class="flex items-center gap-2.5 w-full">
+                    <!-- Main Capsule Pill -->
+                    <div class="dynamic-island-pill flex-1 flex items-center px-4 py-2.5 gap-3 min-w-0">
+                        <!-- Plus Button (Toggle Raster Attachments) -->
+                        <button id="btn-toggle-attach" class="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer" title="Attach Satellite Rasters / Change Mode">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+
+                        <!-- Input Text Field -->
+                        <input type="text" id="main-prompt" placeholder="Ask AI..." class="flex-1 bg-transparent text-xs text-white placeholder-slate-400 font-medium focus:outline-none tracking-wide min-w-0">
+
+                        <!-- Mic Button -->
+                        <button id="btn-voice-input" class="w-7 h-7 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-white/10 transition-colors flex-shrink-0 cursor-pointer" title="Voice Input">
+                            <i data-lucide="mic" class="w-4 h-4"></i>
+                        </button>
+
+                        <!-- Audio Waveform / Send Button -->
+                        <button id="btn-send" class="w-8 h-8 rounded-full flex items-center justify-center text-slate-300 hover:text-blue-400 hover:bg-white/10 transition-all flex-shrink-0 cursor-pointer" title="Execute Query (Enter)">
+                            <i data-lucide="audio-lines" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <!-- Adjacent Circular Close / Clear Button -->
+                    <button id="btn-clear-input" class="dynamic-circle-btn w-11 h-11 flex items-center justify-center text-slate-400 hover:text-white flex-shrink-0 cursor-pointer" title="Clear Text & Reset Uploads">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <p class="text-[10px] text-center text-slate-500 dark:text-slate-400">
+                    AI responses may contain inaccuracies. Verify critical telemetry.
+                </p>
+            </div>
+        </div>
+
+        <!-- Other Tab Views -->
+        <div id="view-analyses" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Analyses & Change Detection Runs</h2>
+                <p class="text-xs text-slate-400">Review historical Specialist Tool executions (T1–T5)</p>
+            </div>
+            <div class="glass-sub-card p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                        <i data-lucide="trees" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h4 class="text-xs font-bold text-slate-900 dark:text-white">Vignan University Vegetation Expansion</h4>
+                        <p class="text-[11px] text-slate-400">ChangeFormer T4 • NDVI Delta +0.28 • 0.42 km²</p>
+                    </div>
+                </div>
+                <span class="text-[10px] px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 font-semibold">Completed</span>
+            </div>
+        </div>
+
+        <div id="view-datasets" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Satellite Datasets Catalog</h2>
+                <p class="text-xs text-slate-400">Ingestion feeds and spectral band registries</p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="glass-sub-card p-4 space-y-2">
+                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">Sentinel-2 L2A</h4>
+                    <p class="text-[11px] text-slate-400">10m multispectral optical coverage with 5-day revisit.</p>
+                </div>
+                <div class="glass-sub-card p-4 space-y-2">
+                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">Sentinel-1 SAR</h4>
+                    <p class="text-[11px] text-slate-400">C-band synthetic aperture radar with all-weather penetration.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-projects" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Active AOI Projects</h2>
+                <p class="text-xs text-slate-400">Spatial workspaces and monitoring zones</p>
+            </div>
+            <div class="glass-sub-card p-4 flex items-center justify-between">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">Vignan University Campus Audit 2025</h4>
+                    <p class="text-[11px] text-slate-400">Hyderabad Suburbs • Lead: Prakash</p>
+                </div>
+                <span class="text-xs font-bold text-blue-500">Active</span>
+            </div>
+        </div>
+
+        <div id="view-reports" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Generated Intelligence Reports</h2>
+                <p class="text-xs text-slate-400">Download GeoJSON boundary layers and PDF summaries</p>
+            </div>
+            <div class="glass-sub-card p-4 flex items-center justify-between">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-900 dark:text-white">Vignan_University_ChangeReport_2025.pdf</h4>
+                    <p class="text-[11px] text-slate-400">Generated Today • 4.2 MB</p>
+                </div>
+                <button class="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold flex items-center gap-1.5">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    <span>Download</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="view-alerts" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Geospatial Telemetry Alerts</h2>
+                <p class="text-xs text-slate-400">Automated threshold triggers & sensor anomalies</p>
+            </div>
+            <div class="glass-sub-card p-4 border-l-4 border-l-emerald-500">
+                <h4 class="text-xs font-bold text-emerald-500">New Construction Grounding Verified</h4>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-1">Vignan South Quad building polygon validated with 94.8% confidence.</p>
+            </div>
+        </div>
+
+        <div id="view-shared" class="tab-view hidden flex-1 flex flex-col space-y-4 overflow-y-auto custom-scroll pr-1">
+            <div class="border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                <h2 class="text-base font-bold text-slate-900 dark:text-white">Collaborative Workspaces</h2>
+                <p class="text-xs text-slate-400">Shared analyst workspaces</p>
+            </div>
+            <div class="glass-sub-card p-4">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-white">Team Earth Intelligence Alpha</h4>
+                <p class="text-[11px] text-slate-400">Lead Analyst: Prakash</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ==================================================================== -->
+    <!-- 3. MIDDLE RESIZER DIVIDER (Between Chat & Map)                       -->
+    <!-- ==================================================================== -->
+    <div id="resizer-bar" title="Drag left/right to resize Chat and Map panes">
+        <div id="resizer-handle"></div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- 4. RIGHT CARD: Precision Geospatial Map Viewport                     -->
+    <!-- ==================================================================== -->
+    <section id="map-pane" class="true-glass flex-1 relative overflow-hidden flex flex-col p-0 z-10" style="min-width: 320px;">
+        
+        <!-- Floating Top Map Toolbar -->
+        <div class="absolute top-4 left-4 right-4 z-[500] flex items-center justify-between pointer-events-none">
+            
+            <!-- Mini-Calendar Selector (Top Left) -->
+            <div class="relative pointer-events-auto flex items-center gap-2">
+                <button id="btn-date-calendar" class="flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-white/80 dark:border-slate-700 shadow-md backdrop-blur-md text-xs font-semibold text-slate-800 dark:text-slate-200 hover:border-blue-400 transition-all">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-blue-500"></i>
+                    <span id="selected-date-text">May 2025</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400 ml-1"></i>
+                </button>
+
+                <!-- Floating Clear AOI Badge -->
+                <div id="aoi-active-badge" class="hidden flex items-center gap-2 px-3 py-1.5 rounded-2xl bg-purple-600/90 text-white text-xs font-bold shadow-lg backdrop-blur-md transition-all">
+                    <i data-lucide="wand-2" class="w-3.5 h-3.5"></i>
+                    <span>AOI Active</span>
+                    <button id="btn-clear-aoi" class="w-5 h-5 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-xs ml-1 transition-colors" title="Remove AOI Selection">
+                        ✕
+                    </button>
+                </div>
+
+                <!-- Mini-Calendar Glass Card -->
+                <div id="calendar-dropdown" class="hidden absolute top-full left-0 mt-2 p-3.5 rounded-2xl true-glass bg-white/98 dark:bg-slate-900/98 border border-white/80 dark:border-slate-700 shadow-2xl backdrop-blur-2xl z-50 w-72 space-y-3">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                        <button id="cal-prev-month" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                        </button>
+                        <span id="cal-current-month-label" class="text-xs font-bold text-slate-900 dark:text-white">May 2025</span>
+                        <button id="cal-next-month" class="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-1 text-center text-[10px]">
+                        <span class="font-bold text-slate-400">Su</span>
+                        <span class="font-bold text-slate-400">Mo</span>
+                        <span class="font-bold text-slate-400">Tu</span>
+                        <span class="font-bold text-slate-400">We</span>
+                        <span class="font-bold text-slate-400">Th</span>
+                        <span class="font-bold text-slate-400">Fr</span>
+                        <span class="font-bold text-slate-400">Sa</span>
+
+                        <span class="p-1.5 text-slate-400 opacity-40">27</span>
+                        <span class="p-1.5 text-slate-400 opacity-40">28</span>
+                        <span class="p-1.5 text-slate-400 opacity-40">29</span>
+                        <span class="p-1.5 text-slate-400 opacity-40">30</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="1">1</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="2">2</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="3">3</span>
+
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="4">4</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="5">5</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="6">6</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="7">7</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="8">8</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="9">9</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="10">10</span>
+
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="11">11</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="12">12</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="13">13</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="14">14</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="15">15</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="16">16</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="17">17</span>
+
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="18">18</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="19">19</span>
+                        <span class="cal-day p-1.5 rounded-lg bg-blue-600 text-white font-bold cursor-pointer shadow-sm" data-day="20">20</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="21">21</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="22">22</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="23">23</span>
+                        <span class="cal-day p-1.5 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-800 cursor-pointer font-medium" data-day="24">24</span>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-1 text-xs">
+                        <button class="cal-epoch-btn w-full p-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold text-left flex justify-between" data-year="2025" data-month="May">
+                            <span>May 20, 2025 (Latest Orbit)</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20">Current</span>
+                        </button>
+                        <button class="cal-epoch-btn w-full p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-left flex justify-between" data-year="2023" data-month="May">
+                            <span>May 10, 2023 (Baseline Orbit)</span>
+                            <span class="text-[9px] text-emerald-500 font-bold">Baseline</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Working 3 Toolbar Buttons -->
+            <div class="pointer-events-auto flex items-center gap-1.5 p-1 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-white/80 dark:border-slate-700 shadow-md backdrop-blur-md">
+                <button id="btn-split-swipe" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors" title="Toggle Interactive Split-Swipe Bi-temporal Comparison">
+                    <i data-lucide="columns" class="w-4 h-4"></i>
+                </button>
+                <button id="btn-wand-draw" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors" title="Magic Wand: Click & Drag to Draw AOI Bounding Box">
+                    <i data-lucide="wand-2" class="w-4 h-4"></i>
+                </button>
+                <button id="btn-fullscreen-toggle" class="p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors" title="Toggle Fullscreen Map View">
+                    <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- The Leaflet Map Canvas -->
+        <div id="coastal-map" class="w-full h-full z-0 relative"></div>
+
+        <!-- STRICTLY CONTAINED SPLIT SWIPE DIVIDER -->
+        <div id="split-badge-left" class="split-badge-left">May 2023 (Baseline)</div>
+        <div id="split-badge-right" class="split-badge-right">May 2025 (Latest Changes)</div>
+        
+        <div id="split-divider-line">
+            <div id="split-divider-handle">
+                <i data-lucide="chevrons-left-right" class="w-4 h-4"></i>
+            </div>
+        </div>
+
+        <!-- Floating Change Detection Legend -->
+        <div class="absolute bottom-5 left-5 z-[500] p-4 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-white/80 dark:border-slate-700 shadow-xl backdrop-blur-md text-xs space-y-2.5 min-w-[170px]">
+            <h4 class="font-bold text-slate-800 dark:text-slate-100 text-xs" id="legend-title">AOI Change Detection</h4>
+            <div class="space-y-2 text-[11px] font-medium" id="legend-items">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/50"></span>
+                    <span class="text-slate-600 dark:text-slate-300">Vegetation Gain</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+                    <span class="text-slate-600 dark:text-slate-300">Built-up Expansion</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-sm shadow-blue-500/50"></span>
+                    <span class="text-slate-600 dark:text-slate-300">Water Retention</span>
+                </div>
+                <div class="flex items-center gap-2.5">
+                    <span class="w-2.5 h-2.5 rounded-full bg-amber-500 shadow-sm shadow-amber-500/50"></span>
+                    <span class="text-slate-600 dark:text-slate-300">Bare Land Transformed</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Floating Map Controls -->
+        <div class="absolute bottom-5 right-5 z-[500] flex flex-col items-end gap-2 pointer-events-none">
+            <div class="pointer-events-auto flex flex-col rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-white/80 dark:border-slate-700 shadow-lg backdrop-blur-md overflow-hidden">
+                <button id="btn-zoom-in" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-b border-slate-100 dark:border-slate-800">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                </button>
+                <button id="btn-zoom-out" class="p-2.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200">
+                    <i data-lucide="minus" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <button id="btn-locate" class="pointer-events-auto p-2.5 rounded-2xl bg-white/95 dark:bg-slate-900/95 border border-white/80 dark:border-slate-700 shadow-lg backdrop-blur-md text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800" title="Recenter Map">
+                <i data-lucide="crosshair" class="w-4 h-4"></i>
+            </button>
+
+            <div class="pointer-events-auto px-2.5 py-1 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700 text-[10px] font-bold text-slate-600 dark:text-slate-300 shadow-sm backdrop-blur-md">
+                500 m
+            </div>
+        </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- MODALS: Settings, Help, Alerts, Datasets, Reports                     -->
+    <!-- ==================================================================== -->
+
+    <!-- 1. SETTINGS MODAL -->
+    <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="true-glass w-full max-w-lg p-6 space-y-4 relative bg-white/95 dark:bg-slate-900/95 shadow-2xl border border-white/80 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center">
+                        <i data-lucide="settings" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Platform Settings</h3>
+                        <p class="text-[11px] text-slate-400">Configure AI Vision Providers and Inference Thresholds</p>
+                    </div>
+                </div>
+                <button id="btn-close-settings" class="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Primary Vision Provider</label>
+                    <select class="w-full p-2 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">
+                        <option>OpenRouter Multi-Model Cascade (Gemma 4 / Nemotron)</option>
+                        <option>GeoChat Service (Local Microservice)</option>
+                        <option>Deterministic Local GIS Engine (Offline Baseline)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700 dark:text-slate-300 block mb-1">Confidence Calibration Threshold</label>
+                    <input type="range" min="50" max="99" value="85" class="w-full accent-blue-600">
+                    <div class="flex justify-between text-[10px] text-slate-400">
+                        <span>Loose (50%)</span>
+                        <span class="font-bold text-blue-500">85% Standard</span>
+                        <span>Strict (99%)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button id="btn-save-settings" class="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition-all">
+                    Save Settings
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. HELP MODAL -->
+    <div id="help-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="true-glass w-full max-w-xl p-6 space-y-5 relative bg-white/95 dark:bg-slate-900/95 shadow-2xl border border-white/80 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center">
+                        <i data-lucide="book-open" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">SatQuery AI Quick Guide</h3>
+                        <p class="text-[11px] text-slate-400">4 easy steps to inspect satellite intelligence</p>
+                    </div>
+                </div>
+                <button id="btn-close-help" class="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs">✕</button>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                    <span class="text-blue-500 font-bold">1. Select Area of Interest</span>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px]">Pan and zoom on the interactive map on the right to frame your target region.</p>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                    <span class="text-emerald-500 font-bold">2. Upload or Auto-Query</span>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px]">Attach your GeoTIFF raster or pick a curated dataset for 1-click execution.</p>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                    <span class="text-indigo-500 font-bold">3. Ask Natural Language</span>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px]">Ask questions about vegetation growth, urban spread, or surface changes.</p>
+                </div>
+                <div class="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700 space-y-1">
+                    <span class="text-amber-500 font-bold">4. Layer Telemetry & Alerts</span>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px]">Click the Alerts button to view exact model layers, latency, and fallback logs.</p>
+                </div>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+                <button id="btn-got-it" class="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition-all">
+                    Got it!
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. ALERTS & LAYER TELEMETRY MODAL -->
+    <div id="alerts-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-lg flex items-center justify-center p-4">
+        <div class="true-glass w-full max-w-3xl max-h-[90vh] flex flex-col p-6 space-y-4 relative bg-white/98 dark:bg-slate-900/98 shadow-2xl border border-white/80 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 flex-shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold">
+                        <i data-lucide="bell-ring" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-slate-900 dark:text-white">AI Model Source & Layer Telemetry</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Auditable trace of which model, provider, and specialist layer generated the analysis</p>
+                    </div>
+                </div>
+                <button id="btn-close-alerts" class="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center font-bold transition-colors">✕</button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto custom-scroll space-y-4 pr-1 text-xs">
+                <div class="space-y-2">
+                    <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider flex items-center gap-2">
+                        <span>Active Analysis Output Attribution</span>
+                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </h4>
+                    <div id="alerts-run-trace" class="space-y-2.5">
+                        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center text-slate-400">
+                            Run an analysis or select a session to inspect detailed model telemetry.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">
+                        Layer Operational Status
+                    </h4>
+                    <div class="grid grid-cols-2 gap-2.5" id="alerts-health-matrix">
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">T4 ChangeFormer</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold">[Local PyTorch]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Local Siamese Bi-Temporal Difference & Bounding Box Engine</p>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">T5 Optical-SAR</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold">[Local NumPy]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Local Texture & Speckle Statistical Fusion Filter</p>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">T1 VQA / Spectral</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold">[Spectral Baseline]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">BigEarthNet HSV Spectral Signature Classifier</p>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">GeoChat-7B VLM</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-slate-500/20 text-slate-500 font-bold">[Microservice Standby]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Service offline; auto-routed to OpenRouter/Spectral fallback</p>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">OpenRouter API</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-600 dark:text-purple-400 font-bold">[OpenRouter]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Google Gemma-4-26B / Qwen-2.5 multi-model tier</p>
+                        </div>
+
+                        <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-800 dark:text-slate-200">Grounded Synthesis</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold">[Synthesis Engine]</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500">Anti-Hallucination Grounded Formatter</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="space-y-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <h4 class="font-bold text-slate-800 dark:text-slate-200 text-xs uppercase tracking-wider">
+                        Recent System Events & Logs
+                    </h4>
+                    <div class="space-y-1.5 text-[11px]" id="alerts-event-log">
+                        <div class="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                            <span class="mt-0.5">ℹ️</span>
+                            <div>
+                                <strong>FastAPI Backend Connected:</strong> Listening on port 8000. Authoritative history storage active.
+                            </div>
+                        </div>
+                        <div class="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                            <span class="mt-0.5">⚠️</span>
+                            <div>
+                                <strong>GeoChat Notice:</strong> Remote GeoChat microservice is offline. Single image VQA requests automatically route to Tier 2 / Tier 3 spectral classifier.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex justify-end flex-shrink-0">
+                <button id="btn-done-alerts" class="px-4 py-2 rounded-xl bg-blue-600 text-white font-bold text-xs hover:bg-blue-700 transition-colors">
+                    Back to Dashboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. DATASETS MODAL -->
+    <div id="datasets-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="true-glass w-full max-w-xl p-6 space-y-4 relative bg-white/98 dark:bg-slate-900/98 shadow-2xl border border-white/80 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center">
+                        <i data-lucide="database" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Earth Observation Datasets</h3>
+                        <p class="text-[11px] text-slate-400">1-Click load curated Sentinel & Cartosat sample imagery</p>
+                    </div>
+                </div>
+                <button id="btn-close-datasets" class="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs">✕</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="dataset-card p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-blue-500 cursor-pointer transition-all" data-sample="opt_0611.png" data-mode="single" data-query="What objects and major land-cover types are visible in this satellite image?">
+                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                        <span>Sentinel-2 Optical</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-600 font-bold">10m RGB</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">High-resolution multispectral composite covering Hyderabad AOI.</p>
+                </div>
+                <div class="dataset-card p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-blue-500 cursor-pointer transition-all" data-sample="opt_0611.png,opt_0810.png" data-mode="multi" data-query="What changed between these optical images?">
+                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                        <span>Bi-Temporal Pair</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-600 font-bold">T1 / T2</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">June 2023 vs August 2025 rasters for ChangeFormer change analysis.</p>
+                </div>
+                <div class="dataset-card p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-blue-500 cursor-pointer transition-all" data-sample="opt_0810.png,sar_0810.png" data-mode="sar" data-query="Analyze this region using optical and SAR information.">
+                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                        <span>Sentinel-1 SAR Fusion</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-600 font-bold">VV / VH</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Co-registered C-band SAR amplitude with optical imagery.</p>
+                </div>
+                <div class="dataset-card p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 hover:border-blue-500 cursor-pointer transition-all" data-sample="opt_0611.png" data-mode="single" data-query="Detect built-up structures and road networks.">
+                    <div class="flex items-center justify-between font-bold text-slate-800 dark:text-slate-200">
+                        <span>Cartosat-2S Urban High-Res</span>
+                        <span class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-600 font-bold">0.8m PAN</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-1">Sub-meter panchromatic image for object grounding.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. REPORTS MODAL -->
+    <div id="reports-modal" class="hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="true-glass w-full max-w-lg p-6 space-y-4 relative bg-white/98 dark:bg-slate-900/98 shadow-2xl border border-white/80 dark:border-slate-700">
+            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 dark:bg-slate-800 text-blue-500 flex items-center justify-center">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-white">Earth Intelligence Report</h3>
+                        <p class="text-[11px] text-slate-400">Export verified findings, metrics, and spatial evidence</p>
+                    </div>
+                </div>
+                <button id="btn-close-reports" class="w-7 h-7 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs">✕</button>
+            </div>
+            <div class="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+                <p class="font-bold text-slate-800 dark:text-slate-200" id="report-modal-title">Active Session Intelligence Summary</p>
+                <p class="text-slate-500 text-[11px]" id="report-modal-desc">This report compiles analytical findings, quantitative hectare area calculations, and high-resolution visual evidence overlays.</p>
+            </div>
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="window.print()" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-md transition-all flex items-center gap-2">
+                    <i data-lucide="printer" class="w-3.5 h-3.5"></i>
+                    <span>Print / Save PDF</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- APPLICATION CONTROLLER SCRIPT                                        -->
+    <!-- ==================================================================== -->
+    <script>
+        (function() {
+            const API_BASE = (window.location.port === '8000' || window.location.origin.includes(':8000') || !window.location.port) ? '' : 'http://127.0.0.1:8000';
+
+            // --------------------------------------------------------------
+            // Theme Management
+            // --------------------------------------------------------------
+            const themeSwitch = document.getElementById('theme-switch');
+            const themeThumbIcon = document.getElementById('theme-thumb-icon');
+
+            function toggleTheme() {
+                const isDark = document.documentElement.classList.toggle('dark');
+                if (themeThumbIcon) {
+                    themeThumbIcon.setAttribute('data-lucide', isDark ? 'moon' : 'sun');
+                    lucide.createIcons();
+                }
+            }
+
+            if (themeSwitch) {
+                themeSwitch.addEventListener('click', toggleTheme);
+            }
+
+            // --------------------------------------------------------------
+            // DOM References
+            // --------------------------------------------------------------
+            const chatStream = document.getElementById('chat-stream');
+            const mainPrompt = document.getElementById('main-prompt');
+            const btnSend = document.getElementById('btn-send');
+            const btnNewChat = document.getElementById('btn-new-chat');
+
+            // Panes & Layout
+            const chatPane = document.getElementById('chat-pane');
+            const mapPane = document.getElementById('map-pane');
+            const resizerBar = document.getElementById('resizer-bar');
+
+            // History dropdown
+            const historyBox = document.getElementById('history-box');
+            const historyDropdown = document.getElementById('history-dropdown');
+            const historyChevron = document.getElementById('history-chevron');
+            const historyFilter = document.getElementById('history-filter');
+            const historyItemsContainer = document.getElementById('history-items');
+            const activeSessionText = document.getElementById('active-session-text');
+            const selectedDateText = document.getElementById('selected-date-text');
+
+            // Modals
+            const alertsModal = document.getElementById('alerts-modal');
+            const btnCloseAlerts = document.getElementById('btn-close-alerts');
+            const btnDoneAlerts = document.getElementById('btn-done-alerts');
+            const alertsRunTrace = document.getElementById('alerts-run-trace');
+
+            const settingsModal = document.getElementById('settings-modal');
+            const btnOpenSettings = document.getElementById('btn-open-settings');
+            const btnCloseSettings = document.getElementById('btn-close-settings');
+            const btnSaveSettings = document.getElementById('btn-save-settings');
+
+            const helpModal = document.getElementById('help-modal');
+            const btnOpenHelp = document.getElementById('btn-open-help');
+            const btnCloseHelp = document.getElementById('btn-close-help');
+            const btnGotIt = document.getElementById('btn-got-it');
+
+            const datasetsModal = document.getElementById('datasets-modal');
+            const btnCloseDatasets = document.getElementById('btn-close-datasets');
+
+            const reportsModal = document.getElementById('reports-modal');
+            const btnCloseReports = document.getElementById('btn-close-reports');
+
+            // Mode Selector
+            const btnModeDropdown = document.getElementById('btn-mode-dropdown');
+            const modeMenu = document.getElementById('mode-menu');
+            const modeActiveIcon = document.getElementById('mode-active-icon');
+            const modeActiveTitle = document.getElementById('mode-active-title');
+            const slotSingle = document.getElementById('slot-single');
+            const slotMulti = document.getElementById('slot-multi');
+            const slotSar = document.getElementById('slot-sar');
+
+            // File Inputs & Labels
+            const inputFileSingle = document.getElementById('input-file-single');
+            const labelFileSingle = document.getElementById('label-file-single');
+            const inputFileT1 = document.getElementById('input-file-t1');
+            const labelT1 = document.getElementById('label-t1');
+            const inputFileT2 = document.getElementById('input-file-t2');
+            const labelT2 = document.getElementById('label-t2');
+            const inputFileVv = document.getElementById('input-file-vv');
+            const labelVv = document.getElementById('label-vv');
+            const inputFileVh = document.getElementById('input-file-vh');
+            const labelVh = document.getElementById('label-vh');
+
+            // Map Controls & Toolbar
+            const btnZoomIn = document.getElementById('btn-zoom-in');
+            const btnZoomOut = document.getElementById('btn-zoom-out');
+            const btnLocate = document.getElementById('btn-locate');
+            const btnClearAoi = document.getElementById('btn-clear-aoi');
+            const btnSplitSwipe = document.getElementById('btn-split-swipe');
+            const btnWandDraw = document.getElementById('btn-wand-draw');
+            const btnFullscreenToggle = document.getElementById('btn-fullscreen-toggle');
+            const btnDateCalendar = document.getElementById('btn-date-calendar');
+            const calendarDropdown = document.getElementById('calendar-dropdown');
+            const splitDividerLine = document.getElementById('split-divider-line');
+            const splitBadgeLeft = document.getElementById('split-badge-left');
+            const splitBadgeRight = document.getElementById('split-badge-right');
+
+            // Navigation buttons
+            const navButtons = document.querySelectorAll('.nav-btn');
+
+            let currentMode = 'single';
+            let activeRunId = null;
+            let latestRunData = null;
+            let map = null;
+            let aoiLayer = null;
+            let isSplitActive = false;
+            let isDrawingAoi = false;
+
+            window.openModal = function(m) {
+                if (m) {
+                    m.classList.remove('hidden');
+                    lucide.createIcons();
+                }
+            };
+
+            window.closeModal = function(m) {
+                if (m) m.classList.add('hidden');
+            };
+
+            window.showLayerAlerts = function() {
+                populateAlertsTelemetry();
+                openModal(alertsModal);
+            };
+
+            // --------------------------------------------------------------
+            // Leaflet Map Initialization
+            // --------------------------------------------------------------
+            function initLeafletMap() {
+                const coastalMapDiv = document.getElementById('coastal-map');
+                if (map || !coastalMapDiv) return;
+                const defaultCenter = [17.3425484, 78.716864];
+                map = L.map('coastal-map', {
+                    center: defaultCenter,
+                    zoom: 15,
+                    zoomControl: false,
+                    attributionControl: false
+                });
+
+                L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                    maxZoom: 21
+                }).addTo(map);
+
+                const campusBounds = [
+                    [17.3450, 78.7135],
+                    [17.3460, 78.7200],
+                    [17.3395, 78.7215],
+                    [17.3385, 78.7145]
+                ];
+                aoiLayer = L.polygon(campusBounds, {
+                    color: '#38bdf8',
+                    weight: 2,
+                    dashArray: '4, 4',
+                    fillColor: '#0284c7',
+                    fillOpacity: 0.15
+                }).addTo(map);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initLeafletMap);
+            } else {
+                initLeafletMap();
+            }
+
+            // --------------------------------------------------------------
+            // Map Toolbar Actions
+            // --------------------------------------------------------------
+            if (btnZoomIn) btnZoomIn.addEventListener('click', () => map && map.zoomIn());
+            if (btnZoomOut) btnZoomOut.addEventListener('click', () => map && map.zoomOut());
+            if (btnLocate) {
+                btnLocate.addEventListener('click', () => {
+                    if (map) map.flyTo([17.3425484, 78.716864], 15, { animate: true, duration: 1.0 });
+                });
+            }
+
+            if (btnClearAoi) {
+                btnClearAoi.addEventListener('click', () => {
+                    if (aoiLayer && map) {
+                        map.removeLayer(aoiLayer);
+                        aoiLayer = null;
+                    }
+                });
+            }
+
+            if (btnFullscreenToggle) {
+                btnFullscreenToggle.addEventListener('click', () => {
+                    if (!document.fullscreenElement) {
+                        mapPane.requestFullscreen?.() || mapPane.webkitRequestFullscreen?.();
+                    } else {
+                        document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+                    }
+                });
+            }
+
+            if (btnDateCalendar && calendarDropdown) {
+                btnDateCalendar.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    calendarDropdown.classList.toggle('hidden');
+                });
+                document.addEventListener('click', () => calendarDropdown.classList.add('hidden'));
+
+                document.querySelectorAll('.cal-epoch-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const yr = btn.getAttribute('data-year');
+                        const mo = btn.getAttribute('data-month');
+                        if (selectedDateText) selectedDateText.innerText = `${mo} ${yr} (Orbit)`;
+                        calendarDropdown.classList.add('hidden');
+                    });
+                });
+            }
+
+            if (btnSplitSwipe) {
+                btnSplitSwipe.addEventListener('click', () => {
+                    isSplitActive = !isSplitActive;
+                    btnSplitSwipe.classList.toggle('bg-blue-500/20', isSplitActive);
+                    btnSplitSwipe.classList.toggle('text-blue-600', isSplitActive);
+                    if (splitDividerLine) splitDividerLine.style.display = isSplitActive ? 'block' : 'none';
+                    if (splitBadgeLeft) splitBadgeLeft.style.display = isSplitActive ? 'block' : 'none';
+                    if (splitBadgeRight) splitBadgeRight.style.display = isSplitActive ? 'block' : 'none';
+                });
+            }
+
+            if (btnWandDraw) {
+                btnWandDraw.addEventListener('click', () => {
+                    isDrawingAoi = !isDrawingAoi;
+                    btnWandDraw.classList.toggle('bg-blue-500/20', isDrawingAoi);
+                    btnWandDraw.classList.toggle('text-blue-600', isDrawingAoi);
+                    if (isDrawingAoi) {
+                        alert("Draw Mode: Click on the map to set custom AOI boundary points.");
+                    }
+                });
+            }
+
+            // --------------------------------------------------------------
+            // Layout Resizer Bar
+            // --------------------------------------------------------------
+            if (resizerBar && chatPane && mapPane) {
+                let isDragging = false;
+                resizerBar.addEventListener('mousedown', (e) => {
+                    isDragging = true;
+                    resizerBar.classList.add('dragging');
+                    document.body.style.cursor = 'col-resize';
+                });
+                document.addEventListener('mousemove', (e) => {
+                    if (!isDragging) return;
+                    const containerWidth = document.body.clientWidth;
+                    const newChatWidth = Math.max(300, Math.min(e.clientX - 232, containerWidth - 400));
+                    chatPane.style.flex = 'none';
+                    chatPane.style.width = newChatWidth + 'px';
+                });
+                document.addEventListener('mouseup', () => {
+                    if (isDragging) {
+                        isDragging = false;
+                        resizerBar.classList.remove('dragging');
+                        document.body.style.cursor = '';
+                        if (map) map.invalidateSize();
+                    }
+                });
+            }
+
+            // --------------------------------------------------------------
+            // Modals Management
+            // --------------------------------------------------------------
+            if (btnOpenSettings) btnOpenSettings.addEventListener('click', () => openModal(settingsModal));
+            if (btnCloseSettings) btnCloseSettings.addEventListener('click', () => closeModal(settingsModal));
+            if (btnSaveSettings) btnSaveSettings.addEventListener('click', () => closeModal(settingsModal));
+
+            if (btnOpenHelp) btnOpenHelp.addEventListener('click', () => openModal(helpModal));
+            if (btnCloseHelp) btnCloseHelp.addEventListener('click', () => closeModal(helpModal));
+            if (btnGotIt) btnGotIt.addEventListener('click', () => closeModal(helpModal));
+
+            if (btnCloseAlerts) btnCloseAlerts.addEventListener('click', () => closeModal(alertsModal));
+            if (btnDoneAlerts) btnDoneAlerts.addEventListener('click', () => closeModal(alertsModal));
+
+            if (btnCloseDatasets) btnCloseDatasets.addEventListener('click', () => closeModal(datasetsModal));
+            if (btnCloseReports) btnCloseReports.addEventListener('click', () => closeModal(reportsModal));
+
+            document.querySelectorAll('.dataset-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const query = card.getAttribute('data-query');
+                    const mode = card.getAttribute('data-mode') || 'single';
+                    const sampleNames = (card.getAttribute('data-sample') || '').split(',');
+
+                    closeModal(datasetsModal);
+
+                    if (mode === 'single') {
+                        currentMode = 'single';
+                        if (modeActiveTitle) modeActiveTitle.innerText = 'Single Optical';
+                        if (modeActiveIcon) modeActiveIcon.setAttribute('data-lucide', 'image');
+                        if (slotSingle) { slotSingle.classList.remove('hidden'); slotSingle.classList.add('block'); }
+                        if (slotMulti) { slotMulti.classList.add('hidden'); slotMulti.classList.remove('grid'); }
+                        if (slotSar) { slotSar.classList.add('hidden'); slotSar.classList.remove('block'); }
+                        if (labelFileSingle) labelFileSingle.innerHTML = `<span class="text-emerald-500 font-bold">✓ Selected:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${sampleNames[0]}</span>`;
+                    } else if (mode === 'multi') {
+                        currentMode = 'multi';
+                        if (modeActiveTitle) modeActiveTitle.innerText = 'Multi-Temporal Pair';
+                        if (modeActiveIcon) modeActiveIcon.setAttribute('data-lucide', 'copy');
+                        if (slotSingle) { slotSingle.classList.add('hidden'); slotSingle.classList.remove('block'); }
+                        if (slotMulti) { slotMulti.classList.remove('hidden'); slotMulti.classList.add('grid'); }
+                        if (slotSar) { slotSar.classList.add('hidden'); slotSar.classList.remove('block'); }
+                        if (labelT1) labelT1.innerHTML = `<span class="text-emerald-500 font-bold">✓ T1:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${sampleNames[0]}</span>`;
+                        if (labelT2) labelT2.innerHTML = `<span class="text-blue-500 font-bold">✓ T2:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${sampleNames[1] || sampleNames[0]}</span>`;
+                    } else if (mode === 'sar') {
+                        currentMode = 'sar';
+                        if (modeActiveTitle) modeActiveTitle.innerText = 'Sentinel-1 SAR Radar';
+                        if (modeActiveIcon) modeActiveIcon.setAttribute('data-lucide', 'radio');
+                        if (slotSingle) { slotSingle.classList.add('hidden'); slotSingle.classList.remove('block'); }
+                        if (slotMulti) { slotMulti.classList.add('hidden'); slotMulti.classList.remove('grid'); }
+                        if (slotSar) { slotSar.classList.remove('hidden'); slotSar.classList.add('block'); }
+                        if (labelVv) labelVv.innerHTML = `<span class="text-purple-500 font-bold">✓ VV:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${sampleNames[0]}</span>`;
+                        if (labelVh) labelVh.innerHTML = `<span class="text-purple-500 font-bold">✓ VH:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${sampleNames[1] || sampleNames[0]}</span>`;
+                    }
+                    lucide.createIcons();
+
+                    if (mainPrompt) {
+                        mainPrompt.value = query;
+                        mainPrompt.focus();
+                    }
+                });
+            });
+
+            // --------------------------------------------------------------
+            // Sidebar Navigation
+            // --------------------------------------------------------------
+            navButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const view = btn.getAttribute('data-view');
+                    navButtons.forEach(b => b.classList.remove('bg-[#edf4ff]', 'dark:bg-blue-900/35', 'text-[#3b82f6]', 'dark:text-blue-400', 'font-semibold'));
+                    btn.classList.add('bg-[#edf4ff]', 'dark:bg-blue-900/35', 'text-[#3b82f6]', 'dark:text-blue-400', 'font-semibold');
+
+                    if (view === 'alerts') {
+                        showLayerAlerts();
+                    } else if (view === 'datasets') {
+                        openModal(datasetsModal);
+                    } else if (view === 'reports') {
+                        openModal(reportsModal);
+                    } else if (view === 'map-explorer') {
+                        if (chatPane) chatPane.style.display = chatPane.style.display === 'none' ? 'flex' : 'none';
+                        if (map) setTimeout(() => map.invalidateSize(), 200);
+                    } else if (view === 'analyses' || view === 'projects' || view === 'shared') {
+                        if (historyDropdown) {
+                            historyDropdown.classList.remove('hidden');
+                            renderHistoryList();
+                        }
+                    } else if (view === 'dashboard') {
+                        if (chatPane) chatPane.style.display = 'flex';
+                        if (map) setTimeout(() => map.invalidateSize(), 200);
+                    }
+                });
+            });
+
+            function populateAlertsTelemetry() {
+                if (!alertsRunTrace) return;
+                if (!latestRunData) {
+                    alertsRunTrace.innerHTML = `
+                        <div class="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-center text-slate-400">
+                            No active analysis execution details yet. Run a query or select a session to inspect detailed model telemetry.
+                        </div>
+                    `;
+                    return;
+                }
+
+                const execDetails = latestRunData.execution_details || {};
+                const modelsList = execDetails.models || [];
+                const geochat = execDetails.geochat_status || { available: true, used_in_this_analysis: false };
+
+                alertsRunTrace.innerHTML = `
+                    <div class="space-y-2 text-xs">
+                        <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
+                            <span class="font-bold text-slate-800 dark:text-slate-300">Run ID: <span class="font-mono text-blue-500">${latestRunData.run_id ? latestRunData.run_id.slice(0, 8) : 'local'}</span></span>
+                            <span class="text-slate-500 dark:text-slate-400 font-semibold">${latestRunData.analysis_type || 'Geospatial Analysis'}</span>
+                        </div>
+
+                        ${modelsList.map(m => {
+                            let badgeBg = 'bg-blue-500/15 text-blue-600 dark:text-blue-400';
+                            if (m.source === 'OpenRouter') badgeBg = 'bg-purple-500/15 text-purple-600 dark:text-purple-400';
+                            else if (m.source === 'GeoChat') badgeBg = 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400';
+                            else if (m.source && m.source.includes('Synthetic')) badgeBg = 'bg-amber-500/15 text-amber-600 dark:text-amber-400';
+
+                            return `
+                                <div class="p-3 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5 shadow-sm">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-slate-900 dark:text-slate-100">${m.task}</span>
+                                            <span class="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${badgeBg}">[${m.source}]</span>
+                                        </div>
+                                        <span class="text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${m.status === 'SUCCESS' ? 'bg-emerald-500/20 text-emerald-600' : 'bg-amber-500/20 text-amber-600'}">${m.status}</span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] text-slate-600 dark:text-slate-400 pt-0.5">
+                                        <div><strong class="text-slate-500 dark:text-slate-400">Actual Model:</strong> <span class="font-mono text-slate-800 dark:text-slate-200 font-medium">${m.actual_model}</span></div>
+                                        <div><strong class="text-slate-500 dark:text-slate-400">Provider:</strong> <span class="text-slate-700 dark:text-slate-300">${m.provider}</span></div>
+                                        <div><strong class="text-slate-500 dark:text-slate-400">Latency:</strong> <span class="text-slate-700 dark:text-slate-300">${m.latency_ms || 120}ms</span></div>
+                                        <div><strong class="text-slate-500 dark:text-slate-400">Requested:</strong> <span class="text-slate-700 dark:text-slate-300">${m.model || m.actual_model}</span></div>
+                                    </div>
+                                    ${m.fallback_used ? `<div class="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 mt-1"><strong>Fallback Reason:</strong> ${m.fallback_reason}</div>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+
+                        <div class="pt-2 text-[11px] text-slate-500 dark:text-slate-400 flex items-center justify-between border-t border-slate-200 dark:border-slate-800">
+                            <span>GeoChat Microservice:</span>
+                            <span class="${geochat.used_in_this_analysis ? 'text-emerald-500 font-bold' : 'text-slate-500 dark:text-slate-400 font-semibold'}">
+                                Available: YES | Used in run: ${geochat.used_in_this_analysis ? 'YES' : 'NO (Cascade routed to fallback)'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // --------------------------------------------------------------
+            // Mode Selector Switching
+            // --------------------------------------------------------------
+            if (btnModeDropdown && modeMenu) {
+                btnModeDropdown.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    modeMenu.classList.toggle('hidden');
+                });
+
+                document.addEventListener('click', () => {
+                    modeMenu.classList.add('hidden');
+                });
+
+                document.querySelectorAll('.mode-option').forEach(opt => {
+                    opt.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        currentMode = opt.getAttribute('data-mode');
+                        const title = opt.getAttribute('data-title');
+                        const icon = opt.getAttribute('data-icon');
+
+                        if (modeActiveTitle) modeActiveTitle.innerText = title;
+                        if (modeActiveIcon) modeActiveIcon.setAttribute('data-lucide', icon);
+                        
+                        if (slotSingle) slotSingle.classList.toggle('hidden', currentMode !== 'single');
+                        if (slotSingle) slotSingle.classList.toggle('block', currentMode === 'single');
+                        
+                        if (slotMulti) slotMulti.classList.toggle('hidden', currentMode !== 'multi');
+                        if (slotMulti) slotMulti.classList.toggle('grid', currentMode === 'multi');
+                        
+                        if (slotSar) slotSar.classList.toggle('hidden', currentMode !== 'sar');
+                        if (slotSar) slotSar.classList.toggle('block', currentMode === 'sar');
+
+                        modeMenu.classList.add('hidden');
+                        lucide.createIcons();
+                    });
+                });
+            }
+
+            // --------------------------------------------------------------
+            // File Upload Change Listeners (Visual Feedback & Filenames)
+            // --------------------------------------------------------------
+            function formatFileSize(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / 1048576).toFixed(1) + ' MB';
+            }
+
+            if (inputFileSingle) {
+                inputFileSingle.addEventListener('change', () => {
+                    if (inputFileSingle.files.length > 0) {
+                        const f = inputFileSingle.files[0];
+                        if (labelFileSingle) {
+                            labelFileSingle.innerHTML = `<span class="text-emerald-500 font-bold">✓ Uploaded:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span> <span class="text-slate-400 font-normal">(${formatFileSize(f.size)})</span>`;
+                        }
+                    }
+                });
+            }
+
+            if (inputFileT1) {
+                inputFileT1.addEventListener('change', () => {
+                    if (inputFileT1.files.length > 0) {
+                        const f = inputFileT1.files[0];
+                        if (labelT1) labelT1.innerHTML = `<span class="text-emerald-500 font-bold">✓ T1:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
+                    }
+                });
+            }
+
+            if (inputFileT2) {
+                inputFileT2.addEventListener('change', () => {
+                    if (inputFileT2.files.length > 0) {
+                        const f = inputFileT2.files[0];
+                        if (labelT2) labelT2.innerHTML = `<span class="text-blue-500 font-bold">✓ T2:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
+                    }
+                });
+            }
+
+            if (inputFileVv) {
+                inputFileVv.addEventListener('change', () => {
+                    if (inputFileVv.files.length > 0) {
+                        const f = inputFileVv.files[0];
+                        if (labelVv) labelVv.innerHTML = `<span class="text-purple-500 font-bold">✓ VV:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
+                    }
+                });
+            }
+
+            if (inputFileVh) {
+                inputFileVh.addEventListener('change', () => {
+                    if (inputFileVh.files.length > 0) {
+                        const f = inputFileVh.files[0];
+                        if (labelVh) labelVh.innerHTML = `<span class="text-purple-500 font-bold">✓ VH:</span> <span class="text-slate-900 dark:text-slate-100 font-mono font-bold">${f.name}</span>`;
+                    }
+                });
+            }
+
+            // --------------------------------------------------------------
+            // History Management
+            // --------------------------------------------------------------
+            async function fetchHistory(query = '') {
+                try {
+                    const url = query ? `${API_BASE}/api/history?q=${encodeURIComponent(query)}` : `${API_BASE}/api/history`;
+                    const res = await fetch(url);
+                    if (res.ok) return await res.json();
+                } catch (e) {
+                    console.warn("Could not fetch history:", e);
+                }
+                return [];
+            }
+
+            async function renderHistoryList(filterTerm = '') {
+                if (!historyItemsContainer) return;
+                const items = await fetchHistory(filterTerm);
+
+                if (!items || items.length === 0) {
+                    historyItemsContainer.innerHTML = `
+                        <div class="p-3 text-center text-slate-400 text-xs">
+                            No analysis sessions found.
+                        </div>
+                    `;
+                    return;
+                }
+
+                historyItemsContainer.innerHTML = items.map(item => {
+                    const isActive = item.run_id === activeRunId;
+                    const statusClass = item.status === 'SUCCESS' 
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' 
+                        : (item.status === 'RUNNING' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' : 'bg-red-500/20 text-red-600 dark:text-red-400');
+                    
+                    const imageChips = (item.image_names || []).map(n => `<span class="font-mono text-[9px] text-slate-500 dark:text-slate-400">📁 ${n}</span>`).join(' • ') || '';
+
+                    return `
+                        <div class="history-item p-2.5 rounded-xl ${isActive ? 'bg-blue-50/90 dark:bg-blue-900/50 border border-blue-200 dark:border-blue-700' : 'hover:bg-slate-100 dark:hover:bg-slate-800/60'} cursor-pointer flex items-center justify-between transition-colors" data-run-id="${item.run_id}">
+                            <div class="max-w-[75%] space-y-0.5">
+                                <p class="font-semibold text-slate-900 dark:text-slate-200 truncate">${item.title || item.query}</p>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${item.analysis_type}</p>
+                                ${imageChips ? `<p class="truncate text-[9px] text-slate-500 dark:text-slate-400">${imageChips}</p>` : ''}
+                                <p class="text-[9px] text-slate-500 dark:text-slate-400">${item.date_display || ''}</p>
+                            </div>
+                            <span class="badge-status text-[9px] px-2 py-0.5 rounded-full font-bold uppercase ${statusClass}">
+                                ${item.status}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+
+                historyItemsContainer.querySelectorAll('.history-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const runId = el.getAttribute('data-run-id');
+                        if (runId) selectHistoryRun(runId);
+                    });
+                });
+            }
+
+            async function selectHistoryRun(runId) {
+                try {
+                    activeRunId = runId;
+                    const res = await fetch(`${API_BASE}/api/history/${runId}`);
+                    if (!res.ok) throw new Error("Run not found");
+                    const record = await res.json();
+
+                    if (activeSessionText) activeSessionText.innerText = record.title || "Selected Analysis";
+                    if (selectedDateText) selectedDateText.innerText = record.date_display || "";
+                    if (historyDropdown) historyDropdown.classList.add('hidden');
+                    if (historyChevron) historyChevron.style.transform = 'rotate(0deg)';
+
+                    latestRunData = record.full_result;
+                    if (record.full_result) {
+                        displayAnalysisResult(record.query, record.full_result, record.image_names);
+                    }
+                    renderHistoryList(historyFilter ? historyFilter.value : '');
+                } catch (e) {
+                    console.error("Error loading history run:", e);
+                }
+            }
+
+            if (historyBox) {
+                historyBox.addEventListener('click', (e) => {
+                    if (e.target === historyFilter) return;
+                    if (historyDropdown) {
+                        const isHidden = historyDropdown.classList.contains('hidden');
+                        if (isHidden) {
+                            historyDropdown.classList.remove('hidden');
+                            if (historyChevron) historyChevron.style.transform = 'rotate(180deg)';
+                            renderHistoryList();
+                        } else {
+                            historyDropdown.classList.add('hidden');
+                            if (historyChevron) historyChevron.style.transform = 'rotate(0deg)';
+                        }
+                    }
+                });
+            }
+
+            if (historyFilter) {
+                historyFilter.addEventListener('input', (e) => {
+                    renderHistoryList(e.target.value);
+                });
+            }
+
+            if (btnNewChat) {
+                btnNewChat.addEventListener('click', () => {
+                    activeRunId = null;
+                    latestRunData = null;
+                    if (activeSessionText) activeSessionText.innerText = "New Spatial Session";
+                    if (mainPrompt) mainPrompt.value = "";
+                    if (labelFileSingle) labelFileSingle.innerText = "Upload Optical Satellite Raster";
+                    if (labelT1) labelT1.innerText = "T1 Baseline Image";
+                    if (labelT2) labelT2.innerText = "T2 Target Image";
+                    if (labelVv) labelVv.innerText = "VV Co-Pol Amplitude";
+                    if (labelVh) labelVh.innerText = "VH Cross-Pol Amplitude";
+                    renderEmptyWelcomeScreen();
+                });
+            }
+
+            function renderEmptyWelcomeScreen() {
+                chatStream.innerHTML = `
+                    <div class="p-6 text-center text-slate-600 dark:text-slate-400 space-y-3">
+                        <div class="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 mx-auto flex items-center justify-center shadow-sm">
+                            <i data-lucide="satellite" class="w-6 h-6"></i>
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">SatQuery AI Earth Intelligence</h3>
+                        <p class="text-xs max-w-md mx-auto text-slate-600 dark:text-slate-400 leading-relaxed">
+                            Upload satellite rasters or pick from sample datasets. The multi-agent pipeline will execute change detection, VQA, or SAR fusion and display verified findings below.
+                        </p>
+                        <div class="flex justify-center gap-2 pt-2 flex-wrap">
+                            <button class="sample-prompt-btn px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-200 hover:border-blue-500 dark:hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 shadow-sm transition-colors" data-prompt="What changed between these two images?">
+                                🔍 Detect Surface Change
+                            </button>
+                            <button class="sample-prompt-btn px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-200 hover:border-blue-500 dark:hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 shadow-sm transition-colors" data-prompt="Analyze this region using optical and SAR information.">
+                                🛰️ Optical + SAR Fusion
+                            </button>
+                            <button class="sample-prompt-btn px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-800 text-[11px] font-medium text-slate-800 dark:text-slate-200 hover:border-blue-500 dark:hover:border-blue-400 hover:text-blue-600 dark:hover:text-blue-300 shadow-sm transition-colors" data-prompt="What objects and land-cover types are visible in this satellite image?">
+                                🌿 Land-Cover VQA
+                            </button>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                chatStream.querySelectorAll('.sample-prompt-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        const promptText = btn.getAttribute('data-prompt');
+                        if (mainPrompt) {
+                            mainPrompt.value = promptText;
+                            mainPrompt.focus();
+                        }
+                    });
+                });
+            }
+
+            async function getSampleFile(filename) {
+                try {
+                    const res = await fetch(`${API_BASE}/api/samples/${filename}`);
+                    if (res.ok) {
+                        const blob = await res.blob();
+                        return new File([blob], filename, { type: blob.type || 'image/png' });
+                    }
+                } catch (e) {
+                    console.warn(`Could not load sample ${filename}:`, e);
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = 64; canvas.height = 64;
+                const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+                return new File([blob], filename, { type: 'image/png' });
+            }
+
+            // --------------------------------------------------------------
+            // Display Results
+            // --------------------------------------------------------------
+            function displayAnalysisResult(queryText, data, imageNames = []) {
+                const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                const execDetails = data.execution_details || {};
+                const models = execDetails.models || [];
+                const primarySpecialist = models.find(m => m.task && !m.task.includes('Intent') && !m.task.includes('Synthesis')) || models[0] || { actual_model: 'SatQuery Engine', source: 'Local' };
+
+                let layerSourceLabel = `${primarySpecialist.actual_model} (${primarySpecialist.source})`;
+
+                const namesToShow = (imageNames && imageNames.length > 0) ? imageNames : (data.image_names || ['opt_0611.png']);
+                const imageBadgesHtml = namesToShow.map(name => `
+                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 text-blue-700 dark:text-blue-300 font-mono text-[10.5px]">
+                        <i data-lucide="image" class="w-3 h-3"></i> ${name}
+                    </span>
+                `).join(' ');
+
+                let evidenceHtml = '';
+                let evidenceImgs = [];
+                if (Array.isArray(data.evidence_images_b64)) {
+                    evidenceImgs = data.evidence_images_b64;
+                } else if (data.evidence_images_b64 && typeof data.evidence_images_b64 === 'object') {
+                    evidenceImgs = Object.values(data.evidence_images_b64);
+                }
+
+                if (evidenceImgs.length > 0) {
+                    evidenceHtml = `
+                        <div class="mt-3 p-3 rounded-xl bg-slate-900/90 border border-blue-500/30 text-left">
+                            <p class="text-[10px] font-bold text-blue-400 mb-2 uppercase tracking-wider">Raster Visual Evidence:</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                ${evidenceImgs.map((b64, idx) => `
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-[9px] text-slate-400 font-mono">Evidence Layer #${idx+1}</span>
+                                        <img src="${b64.startsWith('data:') ? b64 : 'data:image/png;base64,' + b64}" class="w-full h-28 object-cover rounded-lg border border-slate-700 shadow-md" alt="Evidence Layer">
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const changedAreaOut = (data.outputs || []).find(o => o && o.changed_area_ha !== undefined);
+                const changeFracOut = (data.outputs || []).find(o => o && o.change_fraction !== undefined);
+                const changedHa = changedAreaOut ? changedAreaOut.changed_area_ha : (changeFracOut ? (changeFracOut.change_fraction * 124.5).toFixed(2) : null);
+                const severity = changeFracOut ? changeFracOut.severity : 'verified';
+
+                let quantMetricsHtml = '';
+                if (changedHa) {
+                    quantMetricsHtml = `
+                        <div class="mt-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-left space-y-1.5">
+                            <p class="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Quantitative Results</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs">
+                                <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <span class="text-slate-500 dark:text-slate-400 text-[10px]">Changed Surface:</span>
+                                    <p class="text-sm font-bold text-blue-600 dark:text-blue-400">${changedHa} ha</p>
+                                </div>
+                                <div class="p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-sm">
+                                    <span class="text-slate-500 dark:text-slate-400 text-[10px]">Severity Level:</span>
+                                    <p class="text-sm font-bold uppercase text-emerald-600 dark:text-emerald-400">${severity}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                const turnHtml = `
+                    <div class="chat-msg flex justify-end items-start gap-2">
+                        <div class="flex flex-col items-end gap-1.5 max-w-[88%]">
+                            <div class="p-3 rounded-2xl bg-[#edf4ff] dark:bg-slate-800/90 border border-blue-100/80 dark:border-slate-700 shadow-sm space-y-1.5">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    ${imageBadgesHtml}
+                                </div>
+                                <p class="text-xs font-medium text-slate-800 dark:text-slate-200 px-1 leading-relaxed">
+                                    ${queryText}
+                                </p>
+                            </div>
+                            <span class="text-[10px] text-slate-400 flex items-center gap-1 mr-1">
+                                ${timeStr} <i data-lucide="check-check" class="w-3 h-3 text-blue-500"></i>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="chat-msg flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-blue-600">
+                            <i data-lucide="sparkles" class="w-4 h-4"></i>
+                        </div>
+                        <div class="space-y-3 max-w-[90%] text-xs text-slate-800 dark:text-slate-200">
+                            <div class="p-4 rounded-2xl glass-sub-card border border-slate-200/80 dark:border-slate-700 shadow-sm leading-relaxed space-y-3">
+                                
+                                <div class="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-700 flex-wrap gap-2">
+                                    <div class="flex flex-col gap-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider text-[11px]">${data.analysis_type || 'Satellite Observation'}</span>
+                                            <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] text-slate-700 dark:text-slate-300 font-medium">⚡ ${layerSourceLabel}</span>
+                                        </div>
+                                        <div class="flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                            <span>Rasters:</span>
+                                            <div class="flex gap-1 flex-wrap">${imageBadgesHtml}</div>
+                                        </div>
+                                    </div>
+                                    <button onclick="window.showLayerAlerts()" class="open-telemetry-btn flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 font-bold text-[10px] border border-blue-500/25 transition-all shadow-sm cursor-pointer">
+                                        <i data-lucide="bell-ring" class="w-3.5 h-3.5"></i>
+                                        <span>Layer Alerts & Telemetry ➔</span>
+                                    </button>
+                                </div>
+                                
+                                <div class="text-xs leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-line">
+                                    ${data.answer || 'Analysis complete.'}
+                                </div>
+
+                                ${quantMetricsHtml}
+                                ${evidenceHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                chatStream.innerHTML = turnHtml;
+                chatStream.scrollTop = chatStream.scrollHeight;
+                lucide.createIcons();
+
+                chatStream.querySelectorAll('.open-telemetry-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        showLayerAlerts();
+                    });
+                });
+            }
+
+            // --------------------------------------------------------------
+            // Execute Analysis (POST /api/query)
+            // --------------------------------------------------------------
+            async function handleUserSend(overrideSampleFilenames = null) {
+                let queryText = mainPrompt ? mainPrompt.value.trim() : '';
+
+                let filesToUpload = [];
+                if (overrideSampleFilenames && overrideSampleFilenames.length > 0) {
+                    for (const name of overrideSampleFilenames) {
+                        const sampleFile = await getSampleFile(name);
+                        filesToUpload.push(sampleFile);
+                    }
+                } else if (currentMode === 'single') {
+                    if (inputFileSingle && inputFileSingle.files.length > 0) {
+                        filesToUpload.push(inputFileSingle.files[0]);
+                    }
+                } else if (currentMode === 'multi') {
+                    if (inputFileT1 && inputFileT1.files.length > 0) filesToUpload.push(inputFileT1.files[0]);
+                    if (inputFileT2 && inputFileT2.files.length > 0) filesToUpload.push(inputFileT2.files[0]);
+                } else if (currentMode === 'sar') {
+                    if (inputFileVv && inputFileVv.files.length > 0) filesToUpload.push(inputFileVv.files[0]);
+                    if (inputFileVh && inputFileVh.files.length > 0) filesToUpload.push(inputFileVh.files[0]);
+                }
+
+                if (!queryText) {
+                    if (filesToUpload.length > 0) {
+                        if (currentMode === 'multi') queryText = "Detect and quantify surface changes between these multi-temporal rasters.";
+                        else if (currentMode === 'sar') queryText = "Analyze this region using SAR dual-polarization amplitude information.";
+                        else queryText = "Analyze this satellite image and describe all identified terrain and structures.";
+                    } else {
+                        return;
+                    }
+                }
+
+                const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const uploadedNames = filesToUpload.map(f => f.name);
+
+                const userTurnHtml = `
+                    <div class="chat-msg flex justify-end items-start gap-2">
+                        <div class="flex flex-col items-end gap-1.5 max-w-[88%]">
+                            <div class="p-3 rounded-2xl bg-[#edf4ff] dark:bg-slate-800/90 border border-blue-100/80 dark:border-slate-700 shadow-sm space-y-1.5">
+                                ${uploadedNames.length > 0 ? `
+                                    <div class="flex items-center gap-1.5 flex-wrap">
+                                        ${uploadedNames.map(n => `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/50 text-[10px] font-mono text-blue-700 dark:text-blue-300"><i data-lucide="image" class="w-3 h-3"></i> ${n}</span>`).join('')}
+                                    </div>
+                                ` : ''}
+                                <p class="text-xs font-medium text-slate-800 dark:text-slate-200 px-1 leading-relaxed">
+                                    ${queryText}
+                                </p>
+                            </div>
+                            <span class="text-[10px] text-slate-400 flex items-center gap-1 mr-1">
+                                ${timeStr} <i data-lucide="check-check" class="w-3 h-3 text-blue-500"></i>
+                            </span>
+                        </div>
+                    </div>
+                `;
+                chatStream.innerHTML = userTurnHtml;
+                if (mainPrompt) mainPrompt.value = '';
+
+                const thinkingId = 'thinking-' + Date.now();
+                const thinkingHtml = `
+                    <div id="${thinkingId}" class="chat-msg flex items-start gap-3">
+                        <div class="w-8 h-8 rounded-full bg-blue-50 dark:bg-slate-800 border border-blue-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm animate-pulse">
+                            <i data-lucide="sparkles" class="w-4 h-4 text-blue-500"></i>
+                        </div>
+                        <div class="p-3.5 rounded-2xl glass-sub-card text-xs text-slate-600 dark:text-slate-300 flex items-center gap-3 border border-blue-500/20">
+                            <span class="inline-block w-2.5 h-2.5 rounded-full bg-blue-500 animate-ping flex-shrink-0"></span>
+                            <span>Analyzing satellite rasters with SatQuery AI Multi-Agent Pipeline...</span>
+                        </div>
+                    </div>
+                `;
+                chatStream.insertAdjacentHTML('beforeend', thinkingHtml);
+                chatStream.scrollTop = chatStream.scrollHeight;
+                lucide.createIcons();
+
+                try {
+                    const formData = new FormData();
+                    formData.append('query', queryText);
+
+                    if (filesToUpload.length === 0) {
+                        if (queryText.toLowerCase().includes('sar') || queryText.toLowerCase().includes('radar')) {
+                            const f1 = await getSampleFile('sar_0810.png');
+                            const f2 = await getSampleFile('opt_0810.png');
+                            filesToUpload.push(f1, f2);
+                        } else if (queryText.toLowerCase().includes('change') || queryText.toLowerCase().includes('between')) {
+                            const f1 = await getSampleFile('opt_0611.png');
+                            const f2 = await getSampleFile('opt_0810.png');
+                            filesToUpload.push(f1, f2);
+                        } else {
+                            const f1 = await getSampleFile('opt_0611.png');
+                            filesToUpload.push(f1);
+                        }
+                    }
+
+                    filesToUpload.forEach(f => formData.append('files', f));
+
+                    const res = await fetch(`${API_BASE}/api/query`, {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    document.getElementById(thinkingId)?.remove();
+
+                    if (!res.ok) {
+                        const errBody = await res.text();
+                        throw new Error(`Server returned HTTP ${res.status}: ${errBody || res.statusText}`);
+                    }
+
+                    const data = await res.json();
+                    if (data.error) {
+                        throw new Error(data.error);
+                    }
+
+                    activeRunId = data.run_id;
+                    latestRunData = data;
+                    displayAnalysisResult(queryText, data, filesToUpload.map(f => f.name));
+                    renderHistoryList();
+
+                } catch (err) {
+                    document.getElementById(thinkingId)?.remove();
+                    console.error("Pipeline Execution Failure:", err);
+                    const errorHtml = `
+                        <div class="chat-msg flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-full bg-red-50 dark:bg-slate-800 border border-red-200 dark:border-slate-700 flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm text-red-600">
+                                <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                            </div>
+                            <div class="p-4 rounded-2xl bg-red-500/10 border border-red-500/30 text-xs text-red-600 dark:text-red-400 max-w-[88%] text-left space-y-1">
+                                <p class="font-bold">Upload / Analysis Notice</p>
+                                <p>${err.message || 'Unable to process image. Verify file format and backend server.'}</p>
+                            </div>
+                        </div>
+                    `;
+                    chatStream.insertAdjacentHTML('beforeend', errorHtml);
+                    chatStream.scrollTop = chatStream.scrollHeight;
+                    lucide.createIcons();
+                }
+            }
+
+            if (btnSend) btnSend.addEventListener('click', () => handleUserSend());
+            if (mainPrompt) {
+                mainPrompt.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') handleUserSend();
+                });
+            }
+
+            
+            // --------------------------------------------------------------
+            // Dynamic Island Pill Bar Event Handlers
+            // --------------------------------------------------------------
+            const btnToggleAttach = document.getElementById('btn-toggle-attach');
+            const attachmentDrawer = document.getElementById('attachment-drawer');
+            const btnClearInput = document.getElementById('btn-clear-input');
+            const btnVoiceInput = document.getElementById('btn-voice-input');
+
+            if (btnToggleAttach && attachmentDrawer) {
+                btnToggleAttach.addEventListener('click', () => {
+                    attachmentDrawer.classList.toggle('hidden');
+                });
+            }
+
+            if (btnClearInput) {
+                btnClearInput.addEventListener('click', () => {
+                    if (mainPrompt) mainPrompt.value = '';
+                    if (inputFileSingle) inputFileSingle.value = '';
+                    if (inputFileT1) inputFileT1.value = '';
+                    if (inputFileT2) inputFileT2.value = '';
+                    if (inputFileVv) inputFileVv.value = '';
+                    if (inputFileVh) inputFileVh.value = '';
+                    if (labelFileSingle) labelFileSingle.innerText = "Upload Optical Satellite Raster";
+                    if (labelT1) labelT1.innerText = "T1 Baseline Image";
+                    if (labelT2) labelT2.innerText = "T2 Target Image";
+                    if (labelVv) labelVv.innerText = "VV Co-Pol Amplitude";
+                    if (labelVh) labelVh.innerText = "VH Cross-Pol Amplitude";
+                });
+            }
+
+            if (btnVoiceInput) {
+                let isRecording = false;
+                let recognition = null;
+                if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    recognition = new SpeechRec();
+                    recognition.continuous = false;
+                    recognition.interimResults = false;
+                    recognition.lang = 'en-US';
+
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        if (mainPrompt) mainPrompt.value = (mainPrompt.value ? mainPrompt.value + ' ' : '') + transcript;
+                    };
+
+                    recognition.onend = () => {
+                        isRecording = false;
+                        btnVoiceInput.classList.remove('text-red-500', 'animate-pulse');
+                    };
+
+                    recognition.onerror = () => {
+                        isRecording = false;
+                        btnVoiceInput.classList.remove('text-red-500', 'animate-pulse');
+                    };
+                }
+
+                btnVoiceInput.addEventListener('click', () => {
+                    if (!recognition) {
+                        alert("Speech recognition is not supported in this browser.");
+                        return;
+                    }
+                    if (isRecording) {
+                        recognition.stop();
+                        isRecording = false;
+                        btnVoiceInput.classList.remove('text-red-500', 'animate-pulse');
+                    } else {
+                        recognition.start();
+                        isRecording = true;
+                        btnVoiceInput.classList.add('text-red-500', 'animate-pulse');
+                    }
+                });
+            }
+
+            // Initial load
+            renderHistoryList();
+            renderEmptyWelcomeScreen();
+
+        })();
+    </script>
+
+</body>
+</html>

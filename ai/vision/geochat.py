@@ -127,7 +127,7 @@ class GeoChatVisionProvider:
                 headers=headers,
                 files=files,
                 data=data,
-                timeout=(10.0, self.timeout),
+                timeout=(1.5, self.timeout),
             )
         except requests.exceptions.Timeout as e:
             raise VisionTimeoutError(

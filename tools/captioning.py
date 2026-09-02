@@ -62,41 +62,27 @@ class CaptioningTool(BaseTool):
         # 1. Mock execution mode
         if active_mode == "mock":
             adapter = self._get_geochat_adapter(mode="mock")
-            return adapter.caption(image=img_input, mode="mock")
+            mock_res = adapter.caption(image=img_input, mode="mock")
+            mock_res["metadata"].update({
+                "provider": "synthetic",
+                "model": "Deterministic Mock Captioner",
+                "active_tier": "synthetic",
+                "attempted_tiers": ["synthetic"],
+                "tier_journey": [
+                    {"tier": 3, "provider": "synthetic", "model": "Deterministic Mock", "status": "success", "detail": "Direct mock execution"}
+                ],
+                "fallback_used": False,
+                "fallback_reason": None,
+            })
+            return mock_res
 
-        # 2. Real execution mode: Route through configured VisionProvider (GeoChat or OpenRouter)
-        try:
-            provider = self.vision_provider or get_vision_provider()
-            resp = provider.analyze_image_sync(
-                image_input=img_input,
-                prompt="Provide a concise, detailed remote sensing description of this satellite scene.",
-                task="caption",
-                **kwargs,
-            )
-            return {
-                "tool_id": self.tool_id,
-                "answer": resp.text,
-                "confidence": None,
-                "confidence_status": "uncalibrated",
-                "evidence": [],
-                "evidence_image_b64": None,
-                "metadata": {
-                    "provider": resp.provider,
-                    "model": resp.model,
-                    "selected_model": resp.selected_model or resp.model,
-                    "attempted_models": resp.attempted_models or [resp.model],
-                    "fallback_used": resp.fallback_used,
-                    "fallback_reason": resp.fallback_reason,
-                    "latency_ms": resp.latency_ms,
-                    "mode": "remote",
-                },
-            }
-        except Exception as e:
-            # 1. If GeoChat / primary provider fails, attempt secondary live vision models (OpenRouter VLM)
+        # 2. Real execution mode: Multi-tier cascade GeoChat -> OpenRouter -> Synthetic
+        tier_journey: List[Dict[str, Any]] = []
+
+        # If custom vision provider is injected (e.g. in test suite), prioritize it directly
+        if self.vision_provider is not None:
             try:
-                from ai.vision.openrouter_qwen import OpenRouterVisionProvider
-                sec_provider = OpenRouterVisionProvider()
-                sec_resp = sec_provider.analyze_image_sync(
+                resp = self.vision_provider.analyze_image_sync(
                     image_input=img_input,
                     prompt="Provide a concise, detailed remote sensing description of this satellite scene.",
                     task="caption",
@@ -104,46 +90,127 @@ class CaptioningTool(BaseTool):
                 )
                 return {
                     "tool_id": self.tool_id,
-                    "answer": sec_resp.text,
+                    "answer": resp.text,
                     "confidence": None,
                     "confidence_status": "uncalibrated",
                     "evidence": [],
                     "evidence_image_b64": None,
                     "metadata": {
-                        "provider": "openrouter",
-                        "model": sec_resp.selected_model or sec_resp.model or "Gemma-4-26B",
-                        "selected_model": sec_resp.selected_model or sec_resp.model,
-                        "attempted_models": ["geochat", sec_resp.model],
-                        "fallback_used": True,
-                        "fallback_reason": f"GeoChat unavailable; automatically switched to VLM model: {sec_resp.selected_model or sec_resp.model}",
-                        "latency_ms": sec_resp.latency_ms,
+                        "provider": resp.provider,
+                        "model": resp.model,
+                        "selected_model": resp.selected_model or resp.model,
+                        "attempted_models": resp.attempted_models or [resp.model],
+                        "active_tier": resp.provider,
+                        "attempted_tiers": [resp.provider],
+                        "tier_journey": [
+                            {"tier": 1, "provider": resp.provider, "model": resp.model, "status": "success", "detail": "Custom injected vision provider"}
+                        ],
+                        "fallback_used": resp.fallback_used,
+                        "fallback_reason": resp.fallback_reason,
+                        "latency_ms": resp.latency_ms,
                         "mode": "remote",
                     },
                 }
-            except Exception as sec_e:
-                # 2. Deterministic local fallback if all remote vision services fail
-                adapter = self._get_geochat_adapter(mode="mock")
-                fallback_res = adapter.caption(image=img_input, mode="mock")
+            except Exception as custom_err:
+                tier_journey.append({"tier": 1, "provider": "custom_provider", "status": "failed", "detail": str(custom_err)})
 
-                http_status = getattr(e, "status_code", None)
-                clean_err = str(e)
-                clean_sec_err = str(sec_e)
-                if "rate limit" in clean_sec_err.lower() or "429" in clean_sec_err:
-                    vlm_reason = "OpenRouter free quota exhausted (429 Rate Limit)"
-                else:
-                    vlm_reason = f"VLM failure ({type(sec_e).__name__})"
-
-                fallback_reason = f"GeoChat ({type(e).__name__}) and {vlm_reason}"
-
-                fallback_res["metadata"].update({
+        # TIER 1: GEOCHAT VLM
+        geochat_err: Optional[Exception] = None
+        try:
+            from ai.vision.geochat import GeoChatVisionProvider
+            gc_provider = GeoChatVisionProvider()
+            gc_resp = gc_provider.analyze_image_sync(
+                image_input=img_input,
+                prompt="Provide a concise, detailed remote sensing description of this satellite scene.",
+                task="caption",
+                **kwargs,
+            )
+            tier_journey.append({"tier": 1, "provider": "geochat", "model": "GeoChat-7B", "status": "success", "detail": "Live GeoChat VLM captioning"})
+            return {
+                "tool_id": self.tool_id,
+                "answer": gc_resp.text,
+                "confidence": None,
+                "confidence_status": "uncalibrated",
+                "evidence": [],
+                "evidence_image_b64": None,
+                "metadata": {
                     "provider": "geochat",
                     "model": "GeoChat-7B",
-                    "http_status": http_status,
-                    "exception_type": type(e).__name__,
-                    "exception_message": clean_err,
-                    "vlm_fallback_error": vlm_reason,
+                    "selected_model": "GeoChat-7B",
+                    "active_tier": "geochat",
+                    "attempted_tiers": ["geochat"],
+                    "tier_journey": tier_journey,
+                    "fallback_used": False,
+                    "fallback_reason": None,
+                    "latency_ms": gc_resp.latency_ms,
+                    "mode": "remote",
+                },
+            }
+        except Exception as e:
+            geochat_err = e
+            clean_gc_err = f"GeoChat down/unavailable ({type(e).__name__}: {e})"
+            tier_journey.append({"tier": 1, "provider": "geochat", "model": "GeoChat-7B", "status": "failed", "detail": clean_gc_err})
+
+        # TIER 2: OPENROUTER VLM FALLBACK
+        openrouter_err: Optional[Exception] = None
+        try:
+            from ai.vision.openrouter_qwen import OpenRouterVisionProvider
+            or_provider = OpenRouterVisionProvider()
+            or_resp = or_provider.analyze_image_sync(
+                image_input=img_input,
+                prompt="Provide a concise, detailed remote sensing description of this satellite scene.",
+                task="caption",
+                **kwargs,
+            )
+            selected_model = or_resp.selected_model or or_resp.model or "OpenRouter-VLM"
+            tier_journey.append({"tier": 2, "provider": "openrouter", "model": selected_model, "status": "success", "detail": f"Switched to OpenRouter model: {selected_model}"})
+            return {
+                "tool_id": self.tool_id,
+                "answer": or_resp.text,
+                "confidence": None,
+                "confidence_status": "uncalibrated",
+                "evidence": [],
+                "evidence_image_b64": None,
+                "metadata": {
+                    "provider": "openrouter",
+                    "model": selected_model,
+                    "selected_model": selected_model,
+                    "attempted_models": ["GeoChat-7B", selected_model],
+                    "active_tier": "openrouter",
+                    "attempted_tiers": ["geochat", "openrouter"],
+                    "tier_journey": tier_journey,
                     "fallback_used": True,
-                    "fallback_reason": fallback_reason,
-                    "status": "fallback",
-                })
-                return fallback_res
+                    "fallback_reason": f"Tier 1 (GeoChat) was down ({type(geochat_err).__name__ if geochat_err else 'unavailable'}); automatically switched to Tier 2 (OpenRouter: {selected_model})",
+                    "latency_ms": or_resp.latency_ms,
+                    "mode": "remote",
+                },
+            }
+        except Exception as e:
+            openrouter_err = e
+            clean_or_err = f"OpenRouter down/unavailable ({type(e).__name__}: {e})"
+            tier_journey.append({"tier": 2, "provider": "openrouter", "model": "OpenRouter-VLM", "status": "failed", "detail": clean_or_err})
+
+        # TIER 3: SYNTHETIC OUTPUT (Deterministic local spectral description)
+        adapter = self._get_geochat_adapter(mode="mock")
+        fallback_res = adapter.caption(image=img_input, mode="mock")
+
+        tier_journey.append({"tier": 3, "provider": "synthetic", "model": "Synthetic Spectral Captioner", "status": "success", "detail": "Local deterministic rule-based scene description"})
+
+        gc_desc = f"GeoChat down ({type(geochat_err).__name__ if geochat_err else 'unavailable'})"
+        or_desc = f"OpenRouter down ({type(openrouter_err).__name__ if openrouter_err else 'unavailable'})"
+        fallback_reason = f"Step 1: {gc_desc} -> Step 2: {or_desc} -> Step 3: Switched to Synthetic Output"
+
+        fallback_res["metadata"].update({
+            "provider": "synthetic",
+            "model": "Synthetic Spectral Captioner",
+            "selected_model": "Synthetic Spectral Captioner",
+            "active_tier": "synthetic",
+            "attempted_tiers": ["geochat", "openrouter", "synthetic"],
+            "tier_journey": tier_journey,
+            "geochat_error": str(geochat_err),
+            "openrouter_error": str(openrouter_err),
+            "fallback_used": True,
+            "fallback_reason": fallback_reason,
+            "status": "synthetic_fallback",
+        })
+        return fallback_res

@@ -785,15 +785,49 @@
       </div>
 
       <div class="results-grid">
-        <!-- Dual Answer Comparison Grid: GeoChat Raw vs NLP Synthesized -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
-          <!-- 1. Raw Vision Observation -->
-          <div class="result-box" style="border-left: 3px solid #10b981; background: #0c1829;">
-            <div class="result-box-title">
-              <span>🛰️ Visual Observation</span>
-              <span class="chip" style="background:#064e3b; color:#6ee7b7; border:1px solid #10b981; font-size:10px; padding:2px 7px; border-radius:4px;" id="geochat-status-chip">GeoChat-7B</span>
+        <!-- 3-TIER MODEL CASCADE & DIAGNOSTIC PROVENANCE STEPPER -->
+        <div class="result-box" style="border-left: 3px solid #f59e0b; background: #0c1626; padding: 14px;">
+          <div class="result-box-title">
+            <span>🛡️ 3-Tier Multi-Model Cascade & Diagnostic Provenance</span>
+            <span class="chip" style="background:#78350f; color:#fde68a; border:1px solid #f59e0b; font-size:10px; padding:2px 7px; border-radius:4px;" id="cascade-active-badge">Cascade Ready</span>
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 8px;">
+            <!-- Tier 1: GeoChat -->
+            <div id="card-tier-1" style="background: #111e38; border: 1px solid #23325c; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; transition: all 0.2s ease;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 700; font-size: 12px; color: #f1f5f9;">1️⃣ GeoChat-7B (Primary)</span>
+                <span id="badge-tier-1" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #1e293b; color: #94a3b8; font-weight: 600;">STANDBY</span>
+              </div>
+              <div style="font-size: 11px; color: #94a3b8;" id="desc-tier-1">Remote RS-VLM Microservice on GPU</div>
             </div>
-            <div style="font-size: 11px; color: #6ee7b7; margin-bottom: 8px;" id="vlm-model-attribution">⚡ Generated directly by <strong>GeoChat-7B</strong> (Remote Vision-Language Model)</div>
+            <!-- Tier 2: OpenRouter -->
+            <div id="card-tier-2" style="background: #111e38; border: 1px solid #23325c; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; transition: all 0.2s ease;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 700; font-size: 12px; color: #f1f5f9;">2️⃣ OpenRouter VLM (Secondary)</span>
+                <span id="badge-tier-2" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #1e293b; color: #94a3b8; font-weight: 600;">STANDBY</span>
+              </div>
+              <div style="font-size: 11px; color: #94a3b8;" id="desc-tier-2">Gemma-4 / Nemotron / Minimax</div>
+            </div>
+            <!-- Tier 3: Synthetic Output -->
+            <div id="card-tier-3" style="background: #111e38; border: 1px solid #23325c; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; transition: all 0.2s ease;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-weight: 700; font-size: 12px; color: #f1f5f9;">3️⃣ Synthetic Engine (Tertiary)</span>
+                <span id="badge-tier-3" style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #1e293b; color: #94a3b8; font-weight: 600;">STANDBY</span>
+              </div>
+              <div style="font-size: 11px; color: #94a3b8;" id="desc-tier-3">Deterministic Spectral / BigEarthNet Baseline</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dual Answer Comparison Grid: Specialist Vision vs NLP Synthesized -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px;">
+          <!-- 1. Specialist Vision Observation -->
+          <div class="result-box" style="border-left: 3px solid #10b981; background: #0c1829;" id="vlm-box-container">
+            <div class="result-box-title">
+              <span>🛰️ Visual Observation & Specialist Inference</span>
+              <span class="chip" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; font-size:10px; padding:2px 7px; border-radius:4px;" id="geochat-status-chip">Awaiting Run</span>
+            </div>
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;" id="vlm-model-attribution">Awaiting pipeline execution to determine active vision model tier.</div>
             <div class="final-answer-text" id="geochat-answer-text" style="color: #a7f3d0; font-family: var(--font-mono); font-size: 13px; min-height: 48px;">No analysis executed yet. Upload imagery and click Start Analysis.</div>
           </div>
 
@@ -801,9 +835,9 @@
           <div class="result-box" style="border-left: 3px solid #3b82f6; background: #0c1829;">
             <div class="result-box-title">
               <span>🧠 Grounded Final Synthesis</span>
-              <span class="chip" style="background:#1e3a8a; color:#93c5fd; border:1px solid #3b82f6; font-size:10px; padding:2px 7px; border-radius:4px;" id="nlp-status-chip">Minimax M3</span>
+              <span class="chip" style="background:#1e293b; color:#94a3b8; border:1px solid #334155; font-size:10px; padding:2px 7px; border-radius:4px;" id="nlp-status-chip">Awaiting Run</span>
             </div>
-            <div style="font-size: 11px; color: #93c5fd; margin-bottom: 8px;" id="nlp-model-attribution">⚡ Synthesized by <strong>Minimax M3</strong> (Fused with Authoritative GIS Metrics)</div>
+            <div style="font-size: 11px; color: #94a3b8; margin-bottom: 8px;" id="nlp-model-attribution">Awaiting LLM synthesis of visual evidence & GIS metrics.</div>
             <div class="final-answer-text" id="final-answer-text" style="min-height: 48px;">No analysis executed yet. Upload imagery and click Start Analysis.</div>
           </div>
         </div>
@@ -830,20 +864,20 @@
           </div>
           <div id="tech-details-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin-top: 8px; font-size: 12px;">
             <div class="tech-card" style="background: #131f38; border: 1px solid #1e293b; padding: 8px 12px; border-radius: 6px;">
-              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Active VLM Architecture</div>
-              <div id="tech-vlm-model" style="color: #6ee7b7; font-weight: 600; margin-top: 2px;">GeoChat-7B (LLaVA-1.5 RS)</div>
+              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Active Model Tier</div>
+              <div id="tech-vlm-model" style="color: #6ee7b7; font-weight: 600; margin-top: 2px;">--</div>
             </div>
             <div class="tech-card" style="background: #131f38; border: 1px solid #1e293b; padding: 8px 12px; border-radius: 6px;">
-              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Hardware / Accelerator</div>
-              <div id="tech-hardware" style="color: #93c5fd; font-weight: 600; margin-top: 2px;">RTX 3050 6GB GPU (CUDA)</div>
+              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Model Hierarchy Journey</div>
+              <div id="tech-fallback-journey" style="color: #fde68a; font-weight: 600; margin-top: 2px;">GeoChat → OpenRouter → Synthetic</div>
             </div>
             <div class="tech-card" style="background: #131f38; border: 1px solid #1e293b; padding: 8px 12px; border-radius: 6px;">
               <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">NLP Synthesizer</div>
               <div id="tech-nlp-engine" style="color: #c084fc; font-weight: 600; margin-top: 2px;">Minimax M3 (OpenRouter)</div>
             </div>
             <div class="tech-card" style="background: #131f38; border: 1px solid #1e293b; padding: 8px 12px; border-radius: 6px;">
-              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Precision & Quantization</div>
-              <div id="tech-quant" style="color: #fde68a; font-weight: 600; margin-top: 2px;">4-Bit NF4 (bitsandbytes)</div>
+              <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">Hardware / Execution Context</div>
+              <div id="tech-hardware" style="color: #93c5fd; font-weight: 600; margin-top: 2px;">--</div>
             </div>
             <div class="tech-card" style="background: #131f38; border: 1px solid #1e293b; padding: 8px 12px; border-radius: 6px;">
               <div style="color: #94a3b8; font-size: 10px; text-transform: uppercase; font-weight: 600;">GIS & Spectral Engine</div>
@@ -1077,6 +1111,21 @@
       document.getElementById('failure-banner').style.display = 'none';
       document.getElementById('total-latency-badge').style.display = 'none';
       document.getElementById('pipeline-status-badge').textContent = 'Running';
+
+      // Reset Stepper
+      ['1', '2', '3'].forEach(tierNum => {
+        const card = document.getElementById(`card-tier-${tierNum}`);
+        const badge = document.getElementById(`badge-tier-${tierNum}`);
+        if (card) { card.style.borderColor = '#23325c'; card.style.background = '#111e38'; }
+        if (badge) { badge.textContent = 'STANDBY'; badge.style.background = '#1e293b'; badge.style.color = '#94a3b8'; }
+      });
+      const cascadeBadge = document.getElementById('cascade-active-badge');
+      if (cascadeBadge) {
+        cascadeBadge.textContent = 'Cascading Evaluation Active...';
+        cascadeBadge.style.background = '#1e293b';
+        cascadeBadge.style.color = '#94a3b8';
+        cascadeBadge.style.border = '1px solid #334155';
+      }
     }
 
     // Main Execution Flow
@@ -1157,6 +1206,15 @@
         const trace = data.trace || { steps: [] };
         const traceSteps = trace.steps || [];
 
+        // Collect outputs & metadata
+        const outputs = data.outputs || [];
+        const specialistOutput = outputs.length > 0 ? outputs[0] : {};
+        const rawToolAnswer = specialistOutput.answer || 'No direct visual observation recorded.';
+        const toolMeta = specialistOutput.metadata || {};
+        const activeTier = toolMeta.active_tier || data.active_tier || (toolMeta.provider === 'geochat' ? 'geochat' : (toolMeta.provider === 'openrouter' ? 'openrouter' : 'synthetic'));
+        const tierJourney = toolMeta.tier_journey || data.tier_journey || [];
+        const toolsRun = traceSteps.find(s => s.action === 'execute_tools')?.tools_run || [specialistOutput.tool_id || 'T1_VQA'];
+
         // Stage 3: Intent
         setStageState(3, 'success', `Intent: ${data.scenario || 'Classified'}`, 120, 'NLP');
 
@@ -1167,11 +1225,16 @@
         setStageState(5, 'success', 'LangGraph graph compiled & active', 10);
 
         // Stage 6: Tool Routing
-        const toolsRun = traceSteps.find(s => s.action === 'execute_tools')?.tools_run || ['T1_VQA'];
-        setStageState(6, 'success', `Routed to: ${toolsRun.join(', ')}`, 18);
+        setStageState(6, 'success', `Routed to: ${toolsRun.join(', ')} (Hierarchy: GeoChat → OpenRouter → Synthetic)`, 18);
 
         // Stage 7: Specialist Execution
-        setStageState(7, 'success', `Inference complete: ${toolsRun.join(', ')}`, Math.max(100, totalLatency - 350), toolsRun[0]);
+        const tierBadgeText = activeTier === 'geochat' ? 'GEOCHAT' : (activeTier === 'openrouter' ? 'OPENROUTER' : 'SYNTHETIC');
+        const specialistDetail = activeTier === 'geochat'
+          ? `Inference via GeoChat-7B (Live VLM)`
+          : (activeTier === 'openrouter'
+            ? `Inference via OpenRouter (${toolMeta.model || 'VLM'}) [GeoChat Down]`
+            : `Deterministic Spectral Output (${toolMeta.model || 'Synthetic Baseline'}) [GeoChat & OpenRouter Down]`);
+        setStageState(7, 'success', specialistDetail, Math.max(100, totalLatency - 350), tierBadgeText);
 
         // Stage 8: GIS Processing
         setStageState(8, 'success', 'Area metrics & spatial coordinates standardized', 65, 'GIS');
@@ -1183,57 +1246,158 @@
         // Stage 10: LLM Synthesis
         const synSource = data.synthesis_source || 'llm';
         const isFallback = data.fallback_used ? ' [Fallback]' : '';
-        setStageState(10, 'success', `Synthesis: ${synSource}${isFallback}`, 180, synSource === 'llm' ? 'LLM' : 'Fallback');
+        setStageState(10, 'success', `Synthesis: ${synSource}${isFallback}`, 180, synSource === 'llm' || synSource === 'minimax' ? 'LLM' : 'Fallback');
 
         // Stage 11: Final Response
-        setStageState(11, 'success', 'Delivered grounded response payload', 15);
+        setStageState(11, 'success', `Delivered response via ${tierBadgeText} pipeline`, 15);
 
-        // Render Dual Results: GeoChat Raw vs NLP Synthesized
-        const outputs = data.outputs || [];
-        const specialistOutput = outputs.length > 0 ? outputs[0] : {};
-        const rawToolAnswer = specialistOutput.answer || 'No direct visual observation recorded.';
-        const toolMeta = specialistOutput.metadata || {};
-        const isGeoChat = toolMeta.provider === 'geochat' || !toolMeta.provider;
+        // 1. Process 3-Tier Multi-Model Cascade & Diagnostics Stepper
+        const cardTier1 = document.getElementById('card-tier-1');
+        const badgeTier1 = document.getElementById('badge-tier-1');
+        const descTier1 = document.getElementById('desc-tier-1');
+        const cardTier2 = document.getElementById('card-tier-2');
+        const badgeTier2 = document.getElementById('badge-tier-2');
+        const descTier2 = document.getElementById('desc-tier-2');
+        const cardTier3 = document.getElementById('card-tier-3');
+        const badgeTier3 = document.getElementById('badge-tier-3');
+        const descTier3 = document.getElementById('desc-tier-3');
 
-        // 1. Render Raw Vision Observation & Model Provenance (Mark SYNTHETIC if fallback)
-        const isVlmSynthetic = Boolean(toolMeta.fallback_used || toolMeta.mock || toolMeta.status === 'fallback');
+        // Evaluate Tier 1: GeoChat
+        const gcEntry = tierJourney.find(t => t.provider === 'geochat' || t.tier === 1);
+        if (gcEntry) {
+          if (gcEntry.status === 'success' && activeTier === 'geochat') {
+            badgeTier1.textContent = '🟢 ACTIVE (LIVE)';
+            badgeTier1.style.background = 'rgba(16,185,129,0.3)';
+            badgeTier1.style.color = '#6ee7b7';
+            cardTier1.style.borderColor = '#10b981';
+            cardTier1.style.background = 'rgba(16,185,129,0.08)';
+            descTier1.textContent = `Live GeoChat-7B inference completed (${toolMeta.latency_ms ? Math.round(toolMeta.latency_ms) + 'ms' : 'success'})`;
+          } else {
+            badgeTier1.textContent = '🔴 DOWN / FAILED';
+            badgeTier1.style.background = 'rgba(239,68,68,0.3)';
+            badgeTier1.style.color = '#fca5a5';
+            cardTier1.style.borderColor = 'rgba(239,68,68,0.5)';
+            cardTier1.style.background = 'rgba(239,68,68,0.05)';
+            descTier1.textContent = gcEntry.detail || 'Service unreachable / connection failed';
+          }
+        } else {
+          badgeTier1.textContent = '⚪ STANDBY';
+          badgeTier1.style.background = '#1e293b';
+          badgeTier1.style.color = '#94a3b8';
+          cardTier1.style.borderColor = '#23325c';
+          cardTier1.style.background = '#111e38';
+          descTier1.textContent = 'Not invoked for current modality';
+        }
+
+        // Evaluate Tier 2: OpenRouter
+        const orEntry = tierJourney.find(t => t.provider === 'openrouter' || t.tier === 2);
+        if (orEntry) {
+          if (orEntry.status === 'success' && activeTier === 'openrouter') {
+            badgeTier2.textContent = '🟢 ACTIVE (LIVE)';
+            badgeTier2.style.background = 'rgba(59,130,246,0.3)';
+            badgeTier2.style.color = '#93c5fd';
+            cardTier2.style.borderColor = '#3b82f6';
+            cardTier2.style.background = 'rgba(59,130,246,0.08)';
+            descTier2.textContent = `Live VLM: ${toolMeta.model || orEntry.model} (${toolMeta.latency_ms ? Math.round(toolMeta.latency_ms) + 'ms' : 'success'})`;
+          } else {
+            badgeTier2.textContent = '🔴 DOWN / FAILED';
+            badgeTier2.style.background = 'rgba(239,68,68,0.3)';
+            badgeTier2.style.color = '#fca5a5';
+            cardTier2.style.borderColor = 'rgba(239,68,68,0.5)';
+            cardTier2.style.background = 'rgba(239,68,68,0.05)';
+            descTier2.textContent = orEntry.detail || 'Quota limit (429) or unavailable';
+          }
+        } else {
+          badgeTier2.textContent = activeTier === 'geochat' ? '⚪ SKIPPED' : '⚪ STANDBY';
+          badgeTier2.style.background = '#1e293b';
+          badgeTier2.style.color = '#94a3b8';
+          cardTier2.style.borderColor = '#23325c';
+          cardTier2.style.background = '#111e38';
+          descTier2.textContent = activeTier === 'geochat' ? 'GeoChat succeeded directly' : 'Awaiting failover trigger';
+        }
+
+        // Evaluate Tier 3: Synthetic Output
+        if (activeTier === 'synthetic') {
+          badgeTier3.textContent = '🟢 ACTIVE (DETERMINISTIC)';
+          badgeTier3.style.background = 'rgba(245,158,11,0.3)';
+          badgeTier3.style.color = '#fde68a';
+          cardTier3.style.borderColor = '#f59e0b';
+          cardTier3.style.background = 'rgba(245,158,11,0.08)';
+          descTier3.textContent = `Spectral signature analysis (${toolMeta.model || 'BigEarthNet Heuristics'})`;
+        } else {
+          badgeTier3.textContent = '⚪ STANDBY';
+          badgeTier3.style.background = '#1e293b';
+          badgeTier3.style.color = '#94a3b8';
+          cardTier3.style.borderColor = '#23325c';
+          cardTier3.style.background = '#111e38';
+          descTier3.textContent = 'Deterministic baseline in reserve';
+        }
+
+        // Update Cascade Header Badge
+        const cascadeBadge = document.getElementById('cascade-active-badge');
+        if (cascadeBadge) {
+          if (activeTier === 'geochat') {
+            cascadeBadge.textContent = '🟢 Tier 1 Active: GeoChat-7B (Live)';
+            cascadeBadge.style.background = '#064e3b';
+            cascadeBadge.style.color = '#6ee7b7';
+            cascadeBadge.style.border = '1px solid #10b981';
+          } else if (activeTier === 'openrouter') {
+            cascadeBadge.textContent = '⚡ Tier 2 Active: OpenRouter VLM';
+            cascadeBadge.style.background = '#1e3a8a';
+            cascadeBadge.style.color = '#93c5fd';
+            cascadeBadge.style.border = '1px solid #3b82f6';
+          } else {
+            cascadeBadge.textContent = '⚠️ Tier 3 Active: Synthetic Spectral Output';
+            cascadeBadge.style.background = '#78350f';
+            cascadeBadge.style.color = '#fde68a';
+            cascadeBadge.style.border = '1px solid #f59e0b';
+          }
+        }
+
+        // 2. Render Specialist Vision Observation Box
         const geochatBox = document.getElementById('geochat-answer-text');
         if (geochatBox) {
           geochatBox.textContent = rawToolAnswer;
         }
-        const vlmModelName = toolMeta.model || (isGeoChat ? 'GeoChat-7B' : (specialistOutput.tool_id || 'Vision Model'));
+        const vlmModelName = toolMeta.model || (activeTier === 'geochat' ? 'GeoChat-7B' : (activeTier === 'openrouter' ? 'OpenRouter VLM' : 'Synthetic Spectral Baseline'));
         const geochatChip = document.getElementById('geochat-status-chip');
         if (geochatChip) {
-          if (isVlmSynthetic) {
-            geochatChip.textContent = `⚠️ SYNTHETIC (${vlmModelName})`;
-            geochatChip.style.background = '#78350f';
-            geochatChip.style.color = '#fde68a';
-            geochatChip.style.border = '1px solid #f59e0b';
-          } else {
-            geochatChip.textContent = `🟢 LIVE: ${vlmModelName}`;
+          if (activeTier === 'geochat') {
+            geochatChip.textContent = `🟢 TIER 1: ${vlmModelName}`;
             geochatChip.style.background = '#064e3b';
             geochatChip.style.color = '#6ee7b7';
             geochatChip.style.border = '1px solid #10b981';
+          } else if (activeTier === 'openrouter') {
+            geochatChip.textContent = `⚡ TIER 2: ${vlmModelName}`;
+            geochatChip.style.background = '#1e3a8a';
+            geochatChip.style.color = '#93c5fd';
+            geochatChip.style.border = '1px solid #3b82f6';
+          } else {
+            geochatChip.textContent = `⚠️ TIER 3: SYNTHETIC (${vlmModelName})`;
+            geochatChip.style.background = '#78350f';
+            geochatChip.style.color = '#fde68a';
+            geochatChip.style.border = '1px solid #f59e0b';
           }
         }
         const vlmAttribution = document.getElementById('vlm-model-attribution');
         if (vlmAttribution) {
-          if (isVlmSynthetic) {
-            vlmAttribution.innerHTML = `<span style="color:#f59e0b;">⚠️ <strong>[SYNTHETIC / PRE-DEFINED ANSWER]</strong> Rule-based spectral template (${toolMeta.fallback_reason || 'Local fallback active'})</span>`;
+          if (activeTier === 'geochat') {
+            vlmAttribution.innerHTML = `🟢 <strong>[TIER 1 — LIVE GEOCHAT]</strong> Direct multimodal inference via <strong>GeoChat-7B</strong> on GPU.`;
+          } else if (activeTier === 'openrouter') {
+            vlmAttribution.innerHTML = `⚡ <strong>[TIER 2 — OPENROUTER VLM]</strong> GeoChat was down/unavailable; automatically switched to <strong>${vlmModelName}</strong>.`;
           } else {
-            const providerText = toolMeta.provider === 'geochat' ? 'GeoChat Remote Microservice' : (toolMeta.provider === 'openrouter' ? 'OpenRouter VLM' : 'Vision Specialist Engine');
-            vlmAttribution.innerHTML = `⚡ <strong>[LIVE MODEL INFERENCE]</strong> Generated directly by <strong>${vlmModelName}</strong> (${providerText})`;
+            vlmAttribution.innerHTML = `<span style="color:#f59e0b;">⚠️ <strong>[TIER 3 — SYNTHETIC OUTPUT]</strong> Step 1 (GeoChat) was down → Step 2 (OpenRouter) was down → Step 3: Switched to <strong>${vlmModelName}</strong> (Rule-based spectral analysis).</span>`;
           }
         }
 
-        // 2. Render Final Synthesized Answer & NLP Provenance (Mark SYNTHETIC if fallback)
+        // 3. Render Final Synthesized Answer & NLP Provenance
         const isNlpSynthetic = Boolean(data.fallback_used || synSource === 'deterministic_fallback' || synSource === 'raw_tools_fallback');
         document.getElementById('final-answer-text').textContent = data.answer || 'Analysis complete.';
         const nlpModelName = synSource === 'llm' || synSource === 'minimax' ? 'Minimax M3' : (synSource === 'gemma' ? 'Gemma LLM' : synSource);
         const nlpChip = document.getElementById('nlp-status-chip');
         if (nlpChip) {
           if (isNlpSynthetic) {
-            nlpChip.textContent = '⚠️ SYNTHETIC FALLBACK';
+            nlpChip.textContent = '⚠️ SYNTHETIC SYNTHESIS';
             nlpChip.style.background = '#78350f';
             nlpChip.style.color = '#fde68a';
             nlpChip.style.border = '1px solid #f59e0b';
@@ -1247,7 +1411,7 @@
         const nlpAttribution = document.getElementById('nlp-model-attribution');
         if (nlpAttribution) {
           if (isNlpSynthetic) {
-            nlpAttribution.innerHTML = `<span style="color:#f59e0b;">⚠️ <strong>[SYNTHETIC / PRE-DEFINED ANSWER]</strong> Deterministic rule-based template (NLP LLM was bypassed/fallback)</span>`;
+            nlpAttribution.innerHTML = `<span style="color:#f59e0b;">⚠️ <strong>[DETERMINISTIC FALLBACK]</strong> Formatted directly from verified tool findings (LLM synthesis unavailable: ${data.fallback_reason || 'fallback active'}).</span>`;
           } else {
             nlpAttribution.innerHTML = `⚡ <strong>[LIVE LLM SYNTHESIS]</strong> Synthesized by <strong>${nlpModelName}</strong> (Fused with Authoritative GIS Metrics)`;
           }
@@ -1262,11 +1426,15 @@
 
         // Update Observability Panel
         if (document.getElementById('obs-nlp')) {
-          document.getElementById('obs-nlp').textContent = synSource === 'llm' ? 'LLM Synthesizer' : 'Deterministic Fallback';
+          document.getElementById('obs-nlp').textContent = synSource === 'llm' || synSource === 'minimax' ? 'LLM Synthesizer' : 'Deterministic Fallback';
+        }
+        if (document.getElementById('obs-vision')) {
+          document.getElementById('obs-vision').textContent = `${tierBadgeText} (${vlmModelName})`;
         }
 
         // Render Quantitative Metrics
         let quantHtml = `<div class="metric-badges">
+          <div class="metric-badge">Active Tier: <span class="metric-val">${tierBadgeText}</span></div>
           <div class="metric-badge">Scenario: <span class="metric-val">${data.scenario || 'Standard'}</span></div>
           <div class="metric-badge">Synthesis: <span class="metric-val">${synSource}</span></div>
           <div class="metric-badge">Confidence: <span class="metric-val">${Math.round((data.confidence || 0.85) * 100)}%</span></div>
@@ -1276,16 +1444,25 @@
 
         // Populate Technical Specifications & Execution Telemetry
         if (document.getElementById('tech-vlm-model')) {
-          document.getElementById('tech-vlm-model').textContent = vlmModelName;
+          document.getElementById('tech-vlm-model').textContent = `${tierBadgeText}: ${vlmModelName}`;
+        }
+        if (document.getElementById('tech-fallback-journey')) {
+          const journeyText = activeTier === 'geochat'
+            ? 'GeoChat (Direct Success)'
+            : (activeTier === 'openrouter'
+              ? 'GeoChat (Down) → OpenRouter (Active)'
+              : 'GeoChat (Down) → OpenRouter (Down) → Synthetic (Active)');
+          document.getElementById('tech-fallback-journey').textContent = journeyText;
         }
         if (document.getElementById('tech-hardware')) {
-          document.getElementById('tech-hardware').textContent = toolMeta.provider === 'geochat' ? 'RTX 3050 6GB GPU (CUDA)' : 'OpenRouter Accelerated Cloud';
+          document.getElementById('tech-hardware').textContent = activeTier === 'geochat'
+            ? 'RTX 3050 6GB GPU (CUDA Microservice)'
+            : (activeTier === 'openrouter'
+              ? 'OpenRouter Accelerated Cloud'
+              : 'Local CPU Spectral Engine');
         }
         if (document.getElementById('tech-nlp-engine')) {
           document.getElementById('tech-nlp-engine').textContent = nlpModelName + (isNlpSynthetic ? ' [Rule-Based]' : ' (Evidence Grounded)');
-        }
-        if (document.getElementById('tech-quant')) {
-          document.getElementById('tech-quant').textContent = toolMeta.provider === 'geochat' ? '4-Bit NF4 (bitsandbytes)' : 'FP16 Standard';
         }
         if (document.getElementById('tech-gis-engine')) {
           document.getElementById('tech-gis-engine').textContent = data.geojson ? 'Active GeoJSON Extraction' : 'RasterIO + GDAL WGS84';
@@ -1297,7 +1474,7 @@
           document.getElementById('tech-total-latency').textContent = `${totalLatency} ms`;
         }
         if (document.getElementById('tech-calibration')) {
-          document.getElementById('tech-calibration').textContent = isVlmSynthetic ? 'Synthetic Rule-Based' : 'Authoritative GIS + VLM';
+          document.getElementById('tech-calibration').textContent = activeTier === 'synthetic' ? 'Synthetic Rule-Based' : 'Authoritative GIS + VLM';
         }
 
         // Render Evidence Overlays

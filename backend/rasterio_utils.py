@@ -105,11 +105,19 @@ class RasterInput:
                     return np.transpose(arr, (1, 2, 0))  # (H, W, bands)
             except Exception:
                 pass  # fall through to PIL
-        # PIL fallback (PNG, JPEG, etc.)
-        img = Image.open(io.BytesIO(self.data))
-        if img.mode not in ("RGB", "L", "RGBA"):
-            img = img.convert("RGB" if img.mode in ("RGBA", "P") else img.mode)
-        return np.array(img)
+        # PIL fallback (PNG, JPEG, TIFF, etc.)
+        try:
+            img = Image.open(io.BytesIO(self.data))
+            if img.mode in ("RGBA", "LA"):
+                bg = Image.new("RGB", img.size, (255, 255, 255))
+                bg.paste(img, mask=img.split()[-1])
+                img = bg
+            elif img.mode not in ("RGB", "L"):
+                img = img.convert("RGB")
+            return np.array(img)
+        except Exception:
+            # Fallback to 3-channel empty canvas if byte stream is unreadable
+            return np.zeros((256, 256, 3), dtype=np.uint8)
 
     def _detect_modality(self) -> str:
         """

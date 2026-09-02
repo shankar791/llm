@@ -21,8 +21,10 @@ except ImportError:
 MODEL_SLUGS: Dict[str, str] = {
     "gemma_26b": "google/gemma-4-26b-a4b-it:free",
     "gemma_31b": "google/gemma-4-31b-it:free",
-    "nemotron_nano": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "inkling": "thinkingmachines/inkling:free",
+    "inkling_small": "thinkingmachines/inkling-small:free",
     "minimax_m3": "minimax/minimax-m3:free",
+    "nemotron_nano": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "qwen25_free": "qwen/qwen-2.5-vl-7b-instruct:free",
     "qwen25": "qwen/qwen-2.5-vl-7b-instruct",
     "qwen3": "qwen/qwen3-vl-8b-instruct",
@@ -52,10 +54,16 @@ MODEL_ALIASES: Dict[str, str] = {
     "gemma-26b": MODEL_SLUGS["gemma_26b"],
     "gemma-4-26b": MODEL_SLUGS["gemma_26b"],
     "gemma-4-26b-a4b-it": MODEL_SLUGS["gemma_26b"],
+    "gemma": MODEL_SLUGS["gemma_26b"],
+    "google": MODEL_SLUGS["gemma_26b"],
+    "google_gemma": MODEL_SLUGS["gemma_26b"],
     "gemma_31b": MODEL_SLUGS["gemma_31b"],
     "gemma-31b": MODEL_SLUGS["gemma_31b"],
     "gemma-4-31b": MODEL_SLUGS["gemma_31b"],
     "gemma-4-31b-it": MODEL_SLUGS["gemma_31b"],
+    "inkling": MODEL_SLUGS["inkling"],
+    "inkling:free": MODEL_SLUGS["inkling"],
+    "thinkingmachines/inkling:free": MODEL_SLUGS["inkling"],
     "nemotron": MODEL_SLUGS["nemotron_nano"],
     "nemotron_nano": MODEL_SLUGS["nemotron_nano"],
     "nemotron-3-nano": MODEL_SLUGS["nemotron_nano"],
@@ -63,6 +71,7 @@ MODEL_ALIASES: Dict[str, str] = {
     "minimax_m3": MODEL_SLUGS["minimax_m3"],
     "minimax-m3": MODEL_SLUGS["minimax_m3"],
     "qwen25": MODEL_SLUGS["qwen25_free"],
+    "qwen25_free": MODEL_SLUGS["qwen25_free"],
     "qwen2.5": MODEL_SLUGS["qwen25_free"],
     "qwen2.5-vl": MODEL_SLUGS["qwen25_free"],
     "qwen2.5-vl-7b": MODEL_SLUGS["qwen25_free"],
@@ -129,7 +138,7 @@ class VisionConfig:
         """Load vision configuration from environment variables."""
         provider = os.environ.get("VISION_PROVIDER", "openrouter").lower()
         
-        raw_primary = os.environ.get("VISION_PRIMARY_MODEL") or os.environ.get("VISION_MODEL")
+        raw_primary = os.environ.get("VISION_MODEL") or os.environ.get("VISION_PRIMARY_MODEL")
         primary_model = resolve_model_slug(raw_primary, default=DEFAULT_VISION_PRIMARY_MODEL)
 
         raw_secondary = os.environ.get("VISION_SECONDARY_MODEL")

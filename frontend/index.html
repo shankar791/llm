@@ -1,84 +1,367 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
     <meta name='viewport' content='width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover' />
     <meta charset='utf-8'>
-    <link rel="stylesheet" type="text/css" href="styles.css?v=5">
+    <link rel="stylesheet" type="text/css" href="styles.css">
     <link rel="manifest" href="manifest.json">
-    <title>SATQUERY AI</title>
+    <title>SatQuery AI — 3D Satellite & Orbital Intelligence</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet">
     <script src="gsap.min.js"></script>
     <script src="playcanvas-stable.min.js"></script>
     <script src="__settings__.js"></script>
+    <style>
+        /* Status Badge (Top-Left) */
+        .satquery-nav-badge {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: rgba(10, 15, 25, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: 0.1em;
+            pointer-events: auto;
+        }
+        .satquery-pulse {
+            width: 8px;
+            height: 8px;
+            background: #38bdf8;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #38bdf8;
+            animation: satpulse 1.8s infinite ease-in-out;
+        }
+        @keyframes satpulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+        }
+
+        /* Mission Action Floating Bar */
+        .satquery-floating-bar {
+            position: fixed;
+            bottom: 36px;
+            left: 50%;
+            transform: translateX(-50%) translateY(30px) scale(0.95);
+            z-index: 9999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Revealed State: When Satellite Animation Finishes */
+        .satquery-floating-bar.satquery-btn-visible {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(-50%) translateY(0) scale(1);
+        }
+
+        /* Glassmorphic Sci-Fi "ENTER MISSION" Button */
+        .satquery-launch-btn {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            background: linear-gradient(135deg, rgba(14, 23, 42, 0.85) 0%, rgba(30, 58, 138, 0.75) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1.5px solid rgba(56, 189, 248, 0.6);
+            color: #ffffff;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 13px;
+            font-weight: 800;
+            letter-spacing: 1.8px;
+            text-transform: uppercase;
+            padding: 16px 38px;
+            border-radius: 12px;
+            cursor: pointer;
+            box-shadow: 0 0 35px rgba(56, 189, 248, 0.45), inset 0 0 20px rgba(56, 189, 248, 0.2);
+            transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+            text-decoration: none;
+            outline: none;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .satquery-launch-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .satquery-launch-btn:hover::before {
+            left: 100%;
+        }
+
+        .satquery-launch-btn:hover {
+            border-color: #38bdf8;
+            background: linear-gradient(135deg, rgba(20, 35, 65, 0.95), rgba(45, 85, 200, 0.9));
+            box-shadow: 0 0 50px rgba(56, 189, 248, 0.75), inset 0 0 25px rgba(0, 240, 255, 0.4);
+            transform: translateY(-2px) scale(1.03);
+            color: #ffffff;
+        }
+
+        .satquery-launch-btn:active {
+            transform: translateY(1px) scale(0.98);
+        }
+
+        .satquery-launch-btn:focus-visible {
+            border-color: #00f0ff;
+            box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.6), 0 0 40px rgba(56, 189, 248, 0.8);
+        }
+
+        /* Navigating / Loading State */
+        .satquery-launch-btn.navigating {
+            pointer-events: none;
+            opacity: 0.85;
+            background: rgba(14, 23, 42, 0.95);
+            border-color: #38bdf8;
+        }
+
+        .satquery-spinner {
+            display: none;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: satspin 0.7s linear infinite;
+        }
+
+        .satquery-launch-btn.navigating .satquery-spinner {
+            display: inline-block;
+        }
+
+        .satquery-launch-btn.navigating .satquery-icon-arrow {
+            display: none;
+        }
+
+        @keyframes satspin {
+            to { transform: rotate(360deg); }
+        }
+
+        .satquery-secondary-links {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .satquery-sub-link {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.75);
+            background: rgba(10, 15, 25, 0.65);
+            backdrop-filter: blur(10px);
+            padding: 5px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 6px;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .satquery-sub-link:hover {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.5);
+            background: rgba(15, 25, 45, 0.85);
+        }
+
+        /* Mission Launch Visual Transition Overlay */
+        #mission-transition-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 99999999;
+            pointer-events: none;
+            opacity: 0;
+            backdrop-filter: blur(0px);
+            -webkit-backdrop-filter: blur(0px);
+            background: radial-gradient(circle at center, rgba(14, 23, 42, 0.4) 0%, rgba(6, 11, 25, 0.95) 100%);
+            transition: opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), backdrop-filter 0.85s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+
+        #mission-transition-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+        }
+
+        .transition-hud-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 700;
+            color: #38bdf8;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            text-shadow: 0 0 15px rgba(56, 189, 248, 0.8);
+        }
+
+        .transition-progress-bar {
+            width: 220px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .transition-progress-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #38bdf8, #818cf8);
+            box-shadow: 0 0 12px #38bdf8;
+            transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
 </head>
 <body>
     <script src="__modules__.js"></script>
     <script src="__start__.js"></script>
     <script src="__loading__.js"></script>
 
-    <!-- Fast Auto-Redirect Controller on Scroll Endpoint -->
+    <!-- Top Left Status Badge -->
+    <div class="satquery-nav-badge">
+        <span class="satquery-pulse"></span>
+        <span>SATQUERY AI // 3D ORBITAL SIMULATION</span>
+    </div>
+
+    <!-- Floating Action Bar with Animated ENTER MISSION Button -->
+    <div id="satquery-mission-bar" class="satquery-floating-bar" aria-live="polite">
+        <button id="btn-enter-mission" 
+                class="satquery-launch-btn" 
+                tabindex="0" 
+                role="button" 
+                aria-label="Enter SatQuery AI Mission Dashboard">
+            <span class="satquery-spinner" aria-hidden="true"></span>
+            <span style="font-size:16px;" aria-hidden="true">🛰️</span>
+            <span id="btn-text">ENTER MISSION</span>
+            <span class="satquery-icon-arrow" style="font-size:14px;" aria-hidden="true">➔</span>
+        </button>
+        <div class="satquery-secondary-links">
+            <a class="satquery-sub-link" href="/mission">🌐 Direct Mission Access</a>
+            <a class="satquery-sub-link" href="/monitor">📊 Pipeline Monitor</a>
+        </div>
+    </div>
+
+    <!-- Smooth Transition Overlay -->
+    <div id="mission-transition-overlay" aria-hidden="true">
+        <div style="font-size:32px; animation: satpulse 1.2s infinite ease-in-out;">🛰️</div>
+        <div class="transition-hud-text">INITIALIZING MISSION INTERFACE...</div>
+        <div class="transition-progress-bar">
+            <div id="transition-fill" class="transition-progress-fill"></div>
+        </div>
+    </div>
+
     <script>
-        (function() {
-            var hasRedirected = false;
-            var experienceStarted = false;
-            var userHasInteracted = false;
+    (function() {
+        var missionBar = document.getElementById('satquery-mission-bar');
+        var enterBtn = document.getElementById('btn-enter-mission');
+        var btnText = document.getElementById('btn-text');
+        var overlay = document.getElementById('mission-transition-overlay');
+        var fill = document.getElementById('transition-fill');
 
-            // Mark when user clicks 'INITIATE SYSTEM'
-            window.addEventListener('experienceStart', function() {
-                setTimeout(function() {
-                    experienceStarted = true;
-                }, 800);
-            });
+        var isNavigating = false;
+        var hasRevealed = false;
 
-            // Track active user scroll interaction
-            window.addEventListener('wheel', function(e) {
-                if (experienceStarted && e.deltaY > 0) userHasInteracted = true;
-            }, { passive: true });
-            window.addEventListener('touchmove', function() {
-                if (experienceStarted) userHasInteracted = true;
-            }, { passive: true });
-            window.addEventListener('keydown', function(e) {
-                if (experienceStarted && (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ')) {
-                    userHasInteracted = true;
-                }
-            });
+        function revealMissionButton() {
+            if (hasRevealed) return;
+            hasRevealed = true;
+            if (missionBar) {
+                missionBar.classList.add('satquery-btn-visible');
+            }
+        }
 
-            function doFastRedirect() {
-                if (hasRedirected) return;
-                hasRedirected = true;
+        function triggerMissionNavigation() {
+            if (isNavigating) return;
+            isNavigating = true;
 
-                // 200ms atmospheric dive warp flash
-                var flash = document.createElement('div');
-                flash.style.cssText = 'position:fixed; inset:0; background:#d4d4d8; z-index:2147483647; opacity:0; pointer-events:all; transition:opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);';
-                document.body.appendChild(flash);
+            // 1. Disable button and update UI
+            if (enterBtn) {
+                enterBtn.classList.add('navigating');
+                if (btnText) btnText.textContent = 'LAUNCHING MISSION...';
+            }
 
+            // 2. Trigger visual transition overlay (fade/blur scene)
+            if (overlay) {
+                overlay.classList.add('active');
+            }
+            if (fill) {
                 requestAnimationFrame(function() {
-                    flash.style.opacity = '1';
-                    setTimeout(function() {
-                        window.location.href = '/app/?mission=started';
-                    }, 200);
+                    fill.style.width = '100%';
                 });
             }
 
-            var checkEventBus = setInterval(function() {
-                if (window.EventBus && window.EventBus.on) {
-                    clearInterval(checkEventBus);
-                    window.EventBus.on('scroll:progress', function(p) {
-                        // STRICT GUARDS:
-                        // 1. Ignore shader warmup / preloading
-                        // 2. Must be active after user clicked INITIATE SYSTEM
-                        // 3. Must be driven by user scrolling
-                        if (!experienceStarted || !userHasInteracted || window.__sceneWarmup) {
-                            return;
-                        }
+            // 3. Smooth transition timing (850ms) then navigate to same-origin /mission dashboard
+            setTimeout(function() {
+                window.location.href = '/mission';
+            }, 850);
+        }
 
-                        // Trigger auto-redirect only when user genuinely reaches the 10.66% satellite endpoint
-                        if (p >= 0.1055) {
-                            doFastRedirect();
-                        }
+        // Attach Click & Keyboard (Enter / Space) handlers
+        if (enterBtn) {
+            enterBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                triggerMissionNavigation();
+            });
+
+            enterBtn.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    triggerMissionNavigation();
+                }
+            });
+        }
+
+        // Listen to satellite animation completion events
+        window.addEventListener('satellite:animationComplete', function() {
+            revealMissionButton();
+        });
+
+        // Also listen to EventBus experience:entered event
+        if (window.EventBus) {
+            window.EventBus.on('experience:entered', function() {
+                revealMissionButton();
+            });
+        } else {
+            window.addEventListener('load', function() {
+                if (window.EventBus) {
+                    window.EventBus.on('experience:entered', function() {
+                        revealMissionButton();
                     });
                 }
-            }, 30);
-        })();
+            });
+        }
+    })();
     </script>
 </body>
 </html>
