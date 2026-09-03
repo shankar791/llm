@@ -6,6 +6,7 @@ import json
 import mimetypes
 import sys
 import uuid
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -16,7 +17,7 @@ except ImportError:
     pass
 
 from fastapi import FastAPI, UploadFile, File, Form, Query, HTTPException, Request
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -53,7 +54,7 @@ app = FastAPI(title="SatQuery AI", version="1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -95,18 +96,6 @@ async def mission_dashboard():
 async def pipeline_monitor():
     """Serve the legacy 11-stage vertical execution timeline monitor."""
     return (STATIC / "index.html").read_text(encoding="utf-8")
-
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint."""
-    return {"status": "ok", "service": "satquery-ai"}
-
-
-@app.get("/favicon.ico", include_in_schema=False)
-async def favicon():
-    """Prevent 404 logs for browser favicon requests."""
-    return Response(status_code=204)
 
 
 # ---------------------------------------------------------------- Sample Imagery
@@ -170,7 +159,8 @@ async def query_api(
         )
 
         try:
-            result = execute_followup(
+            result = await asyncio.to_thread(
+                execute_followup,
                 query,
                 session_id=session_id,
                 run_id=run_id,
@@ -261,7 +251,7 @@ async def query_api(
     )
 
     try:
-        result = execute(query, rasters, run_id=run_id, session_id=session_id)
+        result = await asyncio.to_thread(execute, query, rasters, run_id=run_id, session_id=session_id)
         result["run_id"] = run_id
         result["session_id"] = session_id
         if "error" in result and not result.get("answer"):
@@ -359,7 +349,20 @@ def followup_api(payload: dict):
         )
     )
 
-    if has_image_context:
+    # SCENARIO 0: Check for unsupported geospatial data queries without dataset
+    q_low = question.lower()
+    is_unsupported_geo = not has_image_context and any(w in q_low for w in ["soil", "soil type", "soil classification", "pedology", "elevation", "altitude", "coordinates", "bathymetry", "depth", "distance to"])
+
+    if is_unsupported_geo:
+        answer_text = "Insufficient verified evidence to answer reliably."
+        llm_source = "Deterministic GIS Baseline"
+        analysis_type = "Geospatial Data Retrieval"
+        task_name = "Deterministic GIS"
+        justification = "Insufficient verified evidence to answer reliably."
+        fallback_used = False
+        fallback_reason = None
+        model_name = "Deterministic GIS Baseline"
+    elif has_image_context:
         # SCENARIO 1: Previous Image Analysis Exists
         prompt = f"""You are answering a follow-up question about a satellite image that has already been analyzed.
 
@@ -382,17 +385,18 @@ Do not invent:
 - measurements
 - change statistics
 
-If the existing analysis does not contain enough information to answer the question, say so clearly.
+If the existing analysis does not contain enough verified evidence to answer the question, say: "Insufficient verified evidence to answer reliably."
 
 Do not claim that a new image analysis was performed."""
 
         system_prompt = (
             "You are the SatQuery AI Synthesis Engine answering follow-up questions about satellite imagery. "
-            "CRITICAL INSTRUCTIONS & ZERO-REASONING POLICY:\n"
-            "- Output ONLY the final response intended for the user. NEVER output internal reasoning, planning steps, or chain-of-thought.\n"
-            "- NEVER write 'Here\'s a thinking process:', 'Thinking:', 'Analyze User Input', 'Draft Response', or numbered steps.\n"
-            "- Base your answers strictly on the supplied existing analysis and evidence. Never invent statistics or claim new analysis was run.\n"
-            "- Format responses cleanly with short headings, bullet points for observations, and bold findings."
+            "Answer ONLY from verified image/GIS/tool evidence provided in context. "
+            "NEVER invent soil types, coordinates, areas, percentages, or confidence. "
+            "If evidence is missing, say: 'Insufficient verified evidence to answer reliably.' "
+            "Remove generic/template content unrelated to the user's question. "
+            "Return one clear, natural, user-facing answer. "
+            "Never output internal reasoning, 'let me think', or internal deliberation."
         )
         analysis_type = "Follow-Up Analysis"
         task_name = "Follow-Up Synthesis"
@@ -401,63 +405,53 @@ Do not claim that a new image analysis was performed."""
         # SCENARIO 2: Fresh Text Prompt (no image context)
         prompt = question
         system_prompt = (
-            "You are SatQuery AI, an expert conversational assistant specializing in Earth observation, "
-            "satellite remote sensing, GIS, and geospatial intelligence.\n"
-            "CRITICAL INSTRUCTIONS & ZERO-REASONING POLICY:\n"
-            "- Output ONLY the direct final response intended for the user. NEVER output reasoning, planning, or chain-of-thought.\n"
-            "- NEVER write 'Here\'s a thinking process:', 'Thinking:', 'Analyze User Input', 'Determine Appropriate Response', 'Draft Response', or numbered planning steps.\n"
-            "- Begin immediately with the user-facing message.\n"
-            "- When the user introduces themselves (e.g. 'my name is shankar'), greet them warmly by name (e.g. 'Nice to meet you, Shankar! 👋') and state how you can help them with satellite imagery, remote sensing, or GIS.\n"
-            "- Answer factually without inventing measurements or coordinates."
+            "You are SatQuery AI. Answer the user's remote sensing or general knowledge question directly, "
+            "concisely, and factually. Return one clear, natural, user-facing answer. "
+            "Never output internal reasoning, 'let me think', or internal deliberation. "
+            "If verified evidence is required but missing, say: 'Insufficient verified evidence to answer reliably.'"
         )
         analysis_type = "Direct LLM Query"
         task_name = "Direct LLM Query"
         justification = "Direct TokenRouter LLM reasoning with no image analysis context."
 
-    # Call existing TokenRouter LLM directly (NO GeoChat, NO VQA, NO Caption, NO ChangeFormer, NO GIS)
-    answer_text = ""
-    llm_source = "TokenRouter GLM-5.3-Free"
-    fallback_used = False
-    fallback_reason = None
-
-    try:
-        from ai.llm.provider import get_llm_provider
-        provider = get_llm_provider()
-        model_name = getattr(provider.config, "model", "z-ai/glm-5.3-free")
-        llm_source = f"TokenRouter ({model_name})"
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt},
-        ]
-        resp = provider.generate_sync(messages, temperature=0.0, max_tokens=1024)
-        raw_content = (resp.content or "").strip()
+    if not is_unsupported_geo:
+        # Call existing TokenRouter LLM directly (NO GeoChat, NO VQA, NO Caption, NO ChangeFormer, NO GIS)
+        answer_text = ""
+        llm_source = "TokenRouter GLM-5.3-Free"
+        fallback_used = False
+        fallback_reason = None
+        model_name = "TokenRouter LLM"
 
         try:
-            from .chat import clean_chat_response
-        except ImportError:
-            try:
-                from chat import clean_chat_response
-            except ImportError:
-                from backend.chat import clean_chat_response
+            from ai.llm.provider import get_llm_provider
+            provider = get_llm_provider()
+            model_name = getattr(provider.config, "model", "z-ai/glm-5.3-free")
+            llm_source = f"TokenRouter ({model_name})"
 
-        answer_text = clean_chat_response(raw_content)
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+            resp = provider.generate_sync(messages, temperature=0.0, max_tokens=512)
+            raw_content = (resp.content or "").strip()
+            from backend.chat import clean_llm_response
+            answer_text = clean_llm_response(raw_content, default_fallback="Insufficient verified evidence to answer reliably.")
 
-    except Exception as e:
-        fallback_used = True
-        fallback_reason = f"{type(e).__name__}: {e}"
-        if has_image_context:
-            from ai.synthesis.fallback import DeterministicFallbackFormatter
-            fb = DeterministicFallbackFormatter()
-            fb_res = fb.format(
-                query=question,
-                tool_results=context.get("outputs") or [],
-                existing_evidence=context.get("evidence") or [],
-                fallback_reason=str(e),
-            )
-            answer_text = fb_res.answer
-        else:
-            answer_text = _get_general_text_fallback(question, str(e))
+        except Exception as e:
+            fallback_used = True
+            fallback_reason = f"{type(e).__name__}: {e}"
+            if has_image_context:
+                from ai.synthesis.fallback import DeterministicFallbackFormatter
+                fb = DeterministicFallbackFormatter()
+                fb_res = fb.format(
+                    query=question,
+                    tool_results=context.get("outputs") or [],
+                    existing_evidence=context.get("evidence") or [],
+                    fallback_reason=str(e),
+                )
+                answer_text = fb_res.answer
+            else:
+                answer_text = _get_general_text_fallback(question, str(e))
 
     if not answer_text:
         if has_image_context:
@@ -466,9 +460,15 @@ Do not claim that a new image analysis was performed."""
         else:
             answer_text = _get_general_text_fallback(question)
 
-    if has_image_context:
-        from ai.synthesis.formatter import format_vlm_presentation
-        answer_text = format_vlm_presentation(answer_text, query=question)
+    from backend.chat import clean_llm_response
+    answer_text = clean_llm_response(answer_text)
+
+    from ai.synthesis.formatter import format_vlm_presentation
+    answer_text = format_vlm_presentation(answer_text, query=question)
+
+    exec_type = "DETERMINISTIC GIS" if is_unsupported_geo else ("DIRECT LLM" if not fallback_used else "FALLBACK")
+    prov_name = "SatQuery GIS Engine" if is_unsupported_geo else ("OpenRouter / TokenRouter" if not fallback_used else "SatQuery Fallback Engine")
+    tool_name = "Deterministic GIS" if is_unsupported_geo else "DIRECT_LLM"
 
     result_payload = {
         "run_id": run_id,
@@ -482,6 +482,14 @@ Do not claim that a new image analysis was performed."""
         "justification": justification,
         "analysis_type": analysis_type,
         "evidence": context.get("evidence") or [] if has_image_context else [],
+        "model_metadata": {
+            "execution_type": exec_type,
+            "provider": prov_name,
+            "model": model_name,
+            "tool": tool_name,
+            "fallback_used": fallback_used,
+            "fallback_status": "FALLBACK" if fallback_used else exec_type,
+        },
         "execution_details": {
             "models": [{
                 "task": task_name,
@@ -537,43 +545,10 @@ def chat_endpoint(payload: dict):
         raise HTTPException(status_code=400, detail="Missing query.")
 
     try:
-        from backend.chat import execute_chat_turn
-    except ImportError:
-        from chat import execute_chat_turn
-
-    try:
         result = execute_chat_turn(session_id=session_id, query=query)
         return result
     except Exception as e:
-        sess = session_store.get_session(session_id)
-        has_context = bool(sess and (sess.get("evidence") or sess.get("last_analysis")))
-        if has_context:
-            from ai.synthesis.fallback import DeterministicFallbackFormatter
-            fb = DeterministicFallbackFormatter()
-            fb_res = fb.format(
-                query=query,
-                tool_results=(sess.get("last_analysis") or {}).get("outputs", []),
-                existing_evidence=sess.get("evidence", []),
-                fallback_reason=str(e),
-            )
-            answer_text = fb_res.answer
-        else:
-            answer_text = _get_general_text_fallback(query, str(e))
-
-        from ai.synthesis.formatter import format_vlm_presentation
-        answer_text = format_vlm_presentation(answer_text, query=query)
-        session_store.add_assistant_message(session_id, answer_text)
-
-        return {
-            "session_id": session_id,
-            "query": query,
-            "answer": answer_text,
-            "response": answer_text,
-            "model": "Deterministic Fallback",
-            "provider": "local_fallback",
-            "fallback": True,
-            "error": str(e)
-        }
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ---------------------------------------------------------------- Analysis Session Endpoints

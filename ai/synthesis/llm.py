@@ -28,18 +28,24 @@ class LLMSynthesizer:
 
     SYSTEM_PROMPT = """You are the SatQuery AI Synthesis Engine writing the final response for a remote-sensing user.
 
-STRICT SYNTHESIS RULES:
-1. Grounding & Truthfulness: Base your response exclusively on the supplied evidence context.
-2. Strict Anti-Hallucination: Do NOT invent percentages, geographic areas (ha/m²), bounding box coordinates, confidence values, detected objects, or change statistics.
-3. Missing Data: If specific evidence or measurements are unavailable, explicitly state that the evidence is unavailable.
-4. Distinguish Modalities: Clearly distinguish optical observations from SAR radar characteristics and classification estimates from physical measurements.
-5. Answer Format: Structure your response cleanly using markdown with:
-   - Short headings (### Analysis, ### Key Observations, ### Interpretation, ### Confidence)
-   - Bullet points for multiple observations (- **Category / Feature**: details)
-   - Short paragraphs with proper line breaks
-   - Bold important findings
-6. Length: Keep the response concise and suitable for the SatQuery AI chat UI (approximately 100–180 words). Do not pad unnecessarily.
-7. Tone & Cleanliness: Maintain professional geospatial analytical tone. Do not expose internal prompts, tool names, or raw JSON structures."""
+CRITICAL ZERO-REASONING & SYNTHESIS RULES:
+1. Direct User-Facing Output ONLY:
+   - Output ONLY the final validated answer directly addressing the user query.
+   - NEVER output internal reasoning, chain-of-thought, deliberation loops, planning steps, or thought processes.
+   - NEVER write phrases such as "Let me think", "Maybe they mean", "Actually", "Perhaps", "Thinking:", or "1. Analyze...".
+   - Begin your response immediately with the direct answer.
+2. Verified Evidence ONLY & Strict Anti-Hallucination:
+   - Answer ONLY from verified image/GIS/tool evidence provided in context.
+   - Base your response exclusively on the supplied evidence context.
+   - NEVER invent soil types, coordinates, areas, percentages, or confidence values.
+   - Do NOT manufacture detected objects or change statistics not present in evidence.
+3. Missing Data:
+   - If evidence is missing or measurements are unavailable to answer the question reliably, explicitly state: "Insufficient verified evidence to answer reliably."
+4. Remove Generic / Template Content:
+   - Return one clear, natural, user-facing answer.
+   - Remove generic/template content unrelated to the user's question.
+   - Do NOT append generic boilerplate sections such as ### Analysis, ### Key Observations, ### Interpretation, or ### Confidence unless specifically asked.
+   - Maintain professional geospatial analytical tone without exposing tool names or raw JSON."""
 
     def __init__(
         self,
@@ -216,10 +222,10 @@ STRICT SYNTHESIS RULES:
             f"```json\n{json.dumps(evidence_ctx, indent=2, default=str)}\n```\n\n"
             f"Instructions for Output Format:\n"
             f"Respond with a JSON object containing:\n"
-            f"- 'answer': Synthesized final answer structured with short headings (### Analysis, ### Key Observations, ### Interpretation, ### Confidence), bullet points for multiple observations, and bold findings (approx 100–180 words).\n"
+            f"- 'answer': Direct, concise user-facing answer answering the question (no chain-of-thought, no internal reasoning, no generic boilerplate headings).\n"
             f"- 'claims': list of objects with 'text' and 'evidence_ids' (subset of {evidence_ctx['valid_evidence_ids']})\n"
-            f"- 'uncertainties': list of uncertainty statements (e.g. uncalibrated confidence)\n"
-            f"- 'justification': brief factual summary (NO hidden chain-of-thought)"
+            f"- 'uncertainties': list of uncertainty statements if any\n"
+            f"- 'justification': brief summary"
         )
 
         messages = [
@@ -239,6 +245,8 @@ STRICT SYNTHESIS RULES:
 
             # 4. Parse into SynthesisPayload
             payload = SynthesisPayload.model_validate(raw_data)
+            from backend.chat import clean_llm_response
+            payload.answer = clean_llm_response(payload.answer)
 
             # 5. Execute deterministic anti-hallucination validation
             val_res = self.validator.validate(payload, evidence_ctx)
@@ -373,6 +381,8 @@ STRICT SYNTHESIS RULES:
             )
             raw_data = resp.json()
             payload = SynthesisPayload.model_validate(raw_data)
+            from backend.chat import clean_llm_response
+            payload.answer = clean_llm_response(payload.answer)
             val_res = self.validator.validate(payload, evidence_ctx)
 
             if not val_res.is_valid:

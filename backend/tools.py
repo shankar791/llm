@@ -127,7 +127,7 @@ def tool_vqa(query: str, rasters, scenario: dict) -> dict:
     try:
         from tools.vqa import VQATool
         vqa_tool = VQATool(mode="real")
-        img_input = rasters[0].thumbnail(768) if hasattr(rasters[0], "thumbnail") else rasters[0]
+        img_input = rasters[0].thumbnail(504) if hasattr(rasters[0], "thumbnail") else rasters[0]
         vlm_res = vqa_tool.run(query=query, image_bytes=img_input, mode="real")
         if vlm_res and vlm_res.get("answer"):
             answer = vlm_res["answer"]
@@ -205,7 +205,7 @@ def tool_caption(raster: RasterInputLike, scenario: dict) -> dict:
     try:
         from tools.captioning import CaptioningTool
         cap_tool = CaptioningTool(mode="real")
-        img_input = raster.thumbnail(768) if hasattr(raster, "thumbnail") else raster
+        img_input = raster.thumbnail(504) if hasattr(raster, "thumbnail") else raster
         vlm_res = cap_tool.run(image_bytes=img_input, mode="real")
         if vlm_res and vlm_res.get("answer"):
             description = vlm_res["answer"]
@@ -297,7 +297,9 @@ def tool_ground(query: str, raster, scenario: dict) -> dict:
     ev_path = _save_evidence(out, "grounding.png")
     labels_txt = ", ".join(f"{k}: {vv['count_regions']} region(s), {vv['coverage_pct']}% coverage"
                            for k, vv in found.items())
-    answer = f"Grounded regions matching your query — {labels_txt}. Bounding boxes overlaid."
+    box_str = ", ".join(f"[{x0}, {y0}, {x1}, {y1}]" for (x0, y0, x1, y1) in boxes[:5])
+    box_clause = f" Bounding boxes: {box_str}." if box_str else " Bounding boxes overlaid."
+    answer = f"Grounded regions matching query: {labels_txt}.{box_clause}"
 
     # Attempt real multimodal VLM grounding if vision provider is available
     vlm_meta = {}

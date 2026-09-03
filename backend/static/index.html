@@ -909,6 +909,8 @@
   </main>
 
   <script>
+    const API_BASE = (window.location.protocol === 'file:' || (window.location.port !== '8000' && !window.location.origin.includes(':8000'))) ? 'http://127.0.0.1:8000' : '';
+
     // State Model
     const AppState = {
       mode: 'single', // 'single', 'pair', 'fusion'
@@ -950,17 +952,17 @@
       if (type === 'single') {
         setMode('single');
         setQuery('What objects and major land-cover types are visible in this satellite scene?');
-        await fetchAndSetImage('/api/samples/opt_0611.png', 'opt_0611.png', 0);
+        await fetchAndSetImage(`${API_BASE}/api/samples/opt_0611.png`, 'opt_0611.png', 0);
       } else if (type === 'pair') {
         setMode('pair');
         setQuery('What changed between these two dates, and where did the change occur?');
-        await fetchAndSetImage('/api/samples/opt_0611.png', 'opt_0611.png', 0);
-        await fetchAndSetImage('/api/samples/opt_0810.png', 'opt_0810.png', 1);
+        await fetchAndSetImage(`${API_BASE}/api/samples/opt_0611.png`, 'opt_0611.png', 0);
+        await fetchAndSetImage(`${API_BASE}/api/samples/opt_0810.png`, 'opt_0810.png', 1);
       } else if (type === 'fusion') {
         setMode('fusion');
         setQuery('Use the optical and SAR images together to identify built-up and water-covered regions.');
-        await fetchAndSetImage('/api/samples/opt_0810.png', 'opt_0810.png', 0);
-        await fetchAndSetImage('/api/samples/sar_0810.png', 'sar_0810.png', 1);
+        await fetchAndSetImage(`${API_BASE}/api/samples/opt_0810.png`, 'opt_0810.png', 0);
+        await fetchAndSetImage(`${API_BASE}/api/samples/sar_0810.png`, 'sar_0810.png', 1);
       }
     }
 
@@ -1175,7 +1177,7 @@
       setStageState(4, 'waiting');
 
       try {
-        const response = await fetch('/api/query', {
+        const response = await fetch(`${API_BASE}/api/query`, {
           method: 'POST',
           body: fd
         });

@@ -81,12 +81,12 @@ class GeoChatVisionProvider:
         self.base_url = (
             base_url
             or getattr(self.config, "geochat_base_url", None)
-            or os.environ.get("GEOCHAT_BASE_URL", "http://172.25.32.36:8000")
+            or os.environ.get("GEOCHAT_BASE_URL", "http://100.108.110.84:8000/")
         ).rstrip("/")
         self.api_key = (
             api_key
             or getattr(self.config, "geochat_api_key", None)
-            or os.environ.get("GEOCHAT_API_KEY", "")
+            or os.environ.get("GEOCHAT_API_KEY", "252fa18193252fa18197")
         )
         self.timeout = timeout or getattr(self.config, "timeout", 120.0)
         self._endpoint = f"{self.base_url}/chat"
@@ -127,7 +127,7 @@ class GeoChatVisionProvider:
                 headers=headers,
                 files=files,
                 data=data,
-                timeout=(1.5, self.timeout),
+                timeout=(15.0, self.timeout),
             )
         except requests.exceptions.Timeout as e:
             raise VisionTimeoutError(

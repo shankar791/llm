@@ -137,3 +137,38 @@ def test_empty_or_malformed_response_handled_safely():
     assert clean_chat_response('{"answer": "Hello World"}') == "Hello World"
     # Unclosed think tag
     assert "Hello!" in clean_chat_response("<think>incomplete thought cut off...")
+
+
+# ==============================================================================
+# TEST 8: Conversational deliberation & 'let me think' loops are removed
+# ==============================================================================
+def test_conversational_deliberation_and_uncertainty_loops_removed():
+    text = (
+        "Let me think about this question. Maybe they mean the buildings on the left.\n\n"
+        "Actually, looking closely at the scene, there are structures across the center.\n\n"
+        "Perhaps the user wants bounding boxes. Here are the detected buildings:\n"
+        "- Building 1: [120, 140, 180, 210]\n"
+        "- Building 2: [250, 300, 310, 360]"
+    )
+    cleaned = clean_chat_response(text)
+    assert "let me think" not in cleaned.lower()
+    assert "maybe they mean" not in cleaned.lower()
+    assert "actually" not in cleaned.lower()
+    assert "perhaps" not in cleaned.lower()
+    assert "Building 1: [120, 140, 180, 210]" in cleaned
+    assert "Building 2: [250, 300, 310, 360]" in cleaned
+
+
+# ==============================================================================
+# TEST 9: In-paragraph 'let me think' deliberation prefix is stripped
+# ==============================================================================
+def test_in_paragraph_deliberation_prefix_stripped():
+    text = (
+        "Let me think. I'm not aware of any specific soil classification dataset attached to this scene. "
+        "Insufficient geospatial evidence is available to determine this reliably."
+    )
+    cleaned = clean_chat_response(text)
+    assert "let me think" not in cleaned.lower()
+    assert "i'm not aware" not in cleaned.lower()
+    assert "Insufficient geospatial evidence is available to determine this reliably." in cleaned
+

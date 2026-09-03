@@ -6,6 +6,9 @@ from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
+from pydantic import BaseModel, Field, model_validator
+
+
 class SynthesisClaim(BaseModel):
     """A factual claim with references to verified EvidenceItem identifiers."""
     text: str = Field(..., description="The factual statement made in the answer")
@@ -18,6 +21,17 @@ class SynthesisPayload(BaseModel):
     claims: List[SynthesisClaim] = Field(default_factory=list, description="Deconstructed factual claims mapped to evidence IDs")
     uncertainties: List[str] = Field(default_factory=list, description="Explicit statements regarding uncertainty or uncalibrated confidence")
     justification: str = Field(default="", description="Brief factual summary of supporting evidence (NO hidden chain-of-thought)")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_fields(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "answer" not in data:
+                for alt in ("text", "response", "content", "summary"):
+                    if alt in data and isinstance(data[alt], str):
+                        data["answer"] = data[alt]
+                        break
+        return data
 
 
 class PostValidationResult(BaseModel):

@@ -19,18 +19,33 @@ class LLMResponse:
     raw_data: Optional[Dict[str, Any]] = field(default=None)
 
     def json(self) -> Dict[str, Any]:
-        """Parse text content as a structured JSON object."""
+        """Parse text content as a structured JSON object, safely stripping thinking tags or fences."""
+        import re
         text = self.content.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if lines and lines[0].startswith("```"):
-                lines = lines[1:]
-            if lines and lines[-1].startswith("```"):
-                lines = lines[:-1]
-            text = "\n".join(lines).strip()
+
+        # 1. Strip XML thinking/planning tags if present
+        text = re.sub(r"<(think|thought|reasoning|plan|cot|internal_thought)>.*?</\1>", "", text, flags=re.DOTALL | re.IGNORECASE).strip()
+        if re.match(r"^<(think|thought|reasoning|plan|cot|internal_thought)>", text, re.IGNORECASE):
+            closed_match = re.search(r"</(think|thought|reasoning|plan|cot|internal_thought)>", text, re.IGNORECASE)
+            if closed_match:
+                text = text[closed_match.end():].strip()
+
+        # 2. Extract from markdown code blocks (```json ... ``` or ``` ... ```)
+        if "```" in text:
+            matches = re.findall(r"```(?:json)?\s*([\s\S]*?)\s*```", text, flags=re.IGNORECASE)
+            for block in reversed(matches):
+                b_strip = block.strip()
+                if b_strip.startswith("{") and b_strip.endswith("}"):
+                    try:
+                        return json.loads(b_strip)
+                    except json.JSONDecodeError:
+                        pass
+
+        # 3. Direct JSON parse
         try:
             return json.loads(text)
         except json.JSONDecodeError as e:
+            # 4. Find outermost or innermost valid JSON object { ... }
             start = text.find("{")
             end = text.rfind("}")
             if start != -1 and end > start:
@@ -38,6 +53,13 @@ class LLMResponse:
                     return json.loads(text[start : end + 1])
                 except json.JSONDecodeError:
                     pass
+            # 5. Scan all '{' candidates from end backward to find the valid JSON block
+            candidates = [m.start() for m in re.finditer(r"\{", text)]
+            for s_idx in reversed(candidates):
+                try:
+                    return json.loads(text[s_idx : end + 1])
+                except json.JSONDecodeError:
+                    continue
             raise ValueError(f"LLM output is not valid JSON: {e}\nRaw output: {self.content}") from e
 
 

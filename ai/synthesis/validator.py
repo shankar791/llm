@@ -95,9 +95,19 @@ class SynthesisValidator:
                     f"but model confidence is marked '{conf_status}'."
                 )
 
+        # 5. Check Fabricated Geospatial Facts (soil, coordinates, elevation)
+        query_text = str(evidence_context.get("query", "")).lower()
+        has_soil_data = any("soil" in str(item).lower() for item in evidence_context.get("evidence_items", [])) or "soil_type" in gis_metrics
+        if any(w in query_text for w in ["soil", "soil type", "soil classification", "pedology"]) and not has_soil_data:
+            soil_hallucination_terms = ["clay", "loam", "silt", "podzol", "chernozem", "vertisol", "fluvisol", "cambisol", "luvisol", "arenosol", "histosol"]
+            if any(term in combined_text.lower() for term in soil_hallucination_terms):
+                if "insufficient" not in combined_text.lower():
+                    violations.append("Manufactured soil classification without authoritative soil dataset.")
+
         is_valid = len(violations) == 0
         return PostValidationResult(
             is_valid=is_valid,
             violations=violations,
             sanitized_answer=payload.answer if is_valid else None,
         )
+

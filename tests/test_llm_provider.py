@@ -29,8 +29,8 @@ from ai.llm.provider import OpenAICompatibleProvider, MockLLMProvider, get_llm_p
 def test_llm_config_defaults():
     cfg = LLMConfig()
     assert cfg.provider == "openai_compatible"
-    assert cfg.model == "minimax/minimax-m3:free"
-    assert cfg.base_url == "https://openrouter.ai/api/v1"
+    assert cfg.model == "z-ai/glm-5.3-free"
+    assert cfg.base_url == "https://api.tokenrouter.com/v1"
     assert cfg.timeout == 30.0
     assert cfg.max_retries == 3
     assert cfg.api_key is None
@@ -150,13 +150,13 @@ def test_openai_compatible_successful_generation():
     """Test successful completion using httpx mock transport."""
     def mock_handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.read())
-        assert body["model"] == "minimax/minimax-m3:free"
+        assert body["model"] == "z-ai/glm-5.3-free"
         assert body["messages"][0]["content"] == "Classify query"
         assert body["response_format"] == {"type": "json_object"}
 
         response_payload = {
             "id": "chatcmpl-test-123",
-            "model": "minimax/minimax-m3:free",
+            "model": "z-ai/glm-5.3-free",
             "choices": [
                 {
                     "index": 0,

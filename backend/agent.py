@@ -33,11 +33,13 @@ except (ImportError, AttributeError):  # running as a plain script (uvicorn serv
 
 # ---------------------------------------------------------------- task classifier
 TASK_KEYWORDS = {
-    "ground": ["highlight", "where is", "locate", "find", "show me the", "bounding", "mark"],
-    "change": ["change", "difference", "between these two dates", "what changed",
+    "ground": ["highlight", "where is", "where are", "locate", "find", "show me the", "show me", "bounding", "mark", "pinpoint", "where are the buildings", "where is the"],
+    "change": ["change", "difference", "between these two dates", "what changed", "between these images", "between these two satellite images",
                "increased", "decreased", "before and after", "compare"],
-    "caption": ["describe", "caption", "summarize what is visible", "what do you see"],
-    "fusion": ["sar", "optical and sar", "together", "cross-modal", "radar"],
+    "caption": ["describe", "caption", "summarize what is visible", "what do you see", "describe this satellite image", "overview"],
+    "fusion": ["sar", "optical and sar", "together", "cross-modal", "radar", "compare optical and sar", "compare the optical and sar"],
+    "geospatial": ["soil", "soil type", "soil classification", "pedology", "elevation", "altitude", "coordinate", "coordinates", "bathymetry", "depth", "cadastral", "parcel"],
+    "general_knowledge": ["what is photosynthesis", "photosynthesis", "how does photosynthesis", "who is", "definition of", "what is remote sensing", "explain photosynthesis"],
 }
 
 
@@ -53,9 +55,35 @@ def classify_task(query: str, scenario: dict) -> dict:
         if hits:
             scores[task] = hits
 
+    # Priority override for geospatial data query (e.g. soil, elevation, coords)
+    if scores.get("geospatial", 0) >= 1:
+        best = "geospatial"
+        workflow = ["Deterministic GIS"]
+        return {"primary_task": best, "workflow": workflow, "classification_scores": scores}
+
+    # Priority override for general knowledge query (e.g. photosynthesis)
+    if scores.get("general_knowledge", 0) >= 1:
+        best = "general_knowledge"
+        workflow = ["DIRECT_LLM"]
+        return {"primary_task": best, "workflow": workflow, "classification_scores": scores}
+
+    # If asking "where are" or "where is", grounding takes precedence over generic "what"
+    if any(k in q for k in ("where are", "where is", "locate", "highlight", "bounding")):
+        scores["ground"] = scores.get("ground", 0) + 3
+
+    # If asking "what changed", change detection takes precedence
+    if any(k in q for k in ("what changed", "change between", "difference between")):
+        scores["change"] = scores.get("change", 0) + 3
+
+    # If asking to compare optical and sar
+    if ("optical" in q and "sar" in q) or "compare optical and sar" in q:
+        scores["fusion"] = scores.get("fusion", 0) + 4
+
     # structural signals dominate when keyword evidence is weak
     if n == 1:
         if scores.get("ground", 0) >= 1:
+            pass
+        elif scores.get("caption", 0) >= 1 and any(k in q for k in ("describe", "caption", "overview")):
             pass
         else:
             vqa_score = 1
@@ -81,9 +109,11 @@ def classify_task(query: str, scenario: dict) -> dict:
     workflow = {
         "ground":  ["T3_Ground"] if n == 1 else ["T4_Change", "T3_Ground"],
         "change":  ["T4_Change"],
-        "caption": ["T1_VQA", "T2_Caption"],
+        "caption": ["T2_Caption"],
         "fusion":  ["T5_OpticalSAR"],
         "vqa":     ["T1_VQA"] + (["T2_Caption"] if any(k in q for k in ("describe", "major objects", "visible")) else []),
+        "geospatial": ["Deterministic GIS"],
+        "general_knowledge": ["DIRECT_LLM"],
     }[best]
 
     return {"primary_task": best, "workflow": workflow,
@@ -269,7 +299,66 @@ def execute(
     # Step 3 — route & execute tools
     outputs = []
 
-    if wf == ["T5_OpticalSAR"] or (plan["primary_task"] == "fusion" and len(rasters) >= 2):
+    if wf == ["Deterministic GIS"] or plan["primary_task"] == "geospatial":
+        out = {
+            "tool": "Deterministic GIS",
+            "tool_id": "Deterministic GIS",
+            "answer": "Insufficient verified evidence to answer reliably.",
+            "evidence": [],
+            "confidence": 0.0,
+            "metadata": {
+                "provider": "SatQuery GIS Engine",
+                "model": "Deterministic GIS Baseline",
+                "active_tier": "deterministic_gis",
+                "execution_type": "DETERMINISTIC GIS",
+                "fallback_used": False,
+                "fallback_reason": None,
+                "latency_ms": 5,
+            }
+        }
+        outputs.append(out)
+    elif wf == ["DIRECT_LLM"] or plan["primary_task"] == "general_knowledge":
+        llm_answer = ""
+        llm_prov_name = "TokenRouter / Upstream LLM"
+        llm_mod_name = "TokenRouter LLM"
+        fb_used = False
+        err_msg = None
+        try:
+            from ai.llm.provider import get_llm_provider
+            from backend.chat import clean_llm_response
+            provider = get_llm_provider()
+            llm_mod_name = getattr(provider.config, "model", "TokenRouter LLM")
+            prompt_msgs = [
+                {"role": "system", "content": "You are SatQuery AI. Answer directly, concisely, and factually using only verified evidence in context. If evidence is missing, say 'Insufficient verified evidence to answer reliably.' Never expose internal reasoning, 'let me think', or internal deliberation. Return one clear, natural, user-facing answer."},
+                {"role": "user", "content": query},
+            ]
+            resp = provider.generate_sync(prompt_msgs, temperature=0.0, max_tokens=512)
+            llm_answer = clean_llm_response(resp.content, default_fallback="Insufficient verified evidence to answer reliably.")
+        except Exception as err:
+            from backend.server import _get_general_text_fallback
+            from backend.chat import clean_llm_response
+            llm_answer = clean_llm_response(_get_general_text_fallback(query, str(err)))
+            fb_used = True
+            err_msg = str(err)
+
+        out = {
+            "tool": "DIRECT_LLM",
+            "tool_id": "DIRECT_LLM",
+            "answer": llm_answer,
+            "evidence": [],
+            "confidence": 0.95,
+            "metadata": {
+                "provider": llm_prov_name,
+                "model": llm_mod_name,
+                "active_tier": "direct_llm",
+                "execution_type": "DIRECT LLM",
+                "fallback_used": fb_used,
+                "fallback_reason": err_msg,
+                "latency_ms": 250,
+            }
+        }
+        outputs.append(out)
+    elif wf == ["T5_OpticalSAR"] or (plan["primary_task"] == "fusion" and len(rasters) >= 2):
         opt = next((r for r in rasters if r.modality == "optical"), None)
         sar = next((r for r in rasters if r.modality == "sar"), None)
         if opt is None and sar is None:
@@ -322,37 +411,46 @@ def execute(
     valid_confs = [o["confidence"] for o in outputs if o.get("confidence") is not None]
     confidence = min(valid_confs) if valid_confs else 0.6
 
-    syn_model_name = ""
     claims_list = []
     uncertainties_list = []
     syn_justification = ""
     syn_model_name = ""
-    try:
-        from ai.synthesis.llm import LLMSynthesizer
-        synthesizer = LLMSynthesizer()
-        syn_model_name = getattr(getattr(synthesizer, "provider", None), "config", None) and synthesizer.provider.config.model or "OpenRouter LLM"
-        syn_res = synthesizer.synthesize(
-            query=query,
-            tool_results=outputs,
-            confidence=confidence,
-            confidence_status="uncalibrated",
-            intent={"task": plan["primary_task"], "workflow": plan["workflow"]},
-        )
-        final_answer = syn_res.answer
-        syn_source = syn_res.synthesis_source
-        fb_used = syn_res.fallback_used
-        fb_reason = syn_res.fallback_reason
-        claims_list = [c.model_dump() if hasattr(c, "model_dump") else {"text": c.text, "evidence_ids": c.evidence_ids} for c in syn_res.claims]
-        uncertainties_list = syn_res.uncertainties
-        syn_justification = syn_res.justification
-    except Exception as syn_err:
-        final_answer = "\n\n".join(o.get("answer") for o in outputs if o.get("answer"))
-        syn_source = "raw_tools_fallback"
-        fb_used = True
-        fb_reason = str(syn_err)
-        claims_list = [{"text": final_answer, "evidence_ids": ["E1"]}]
-        uncertainties_list = ["Model confidence is uncalibrated."]
-        syn_justification = "Specialist tool findings."
+
+    if plan["primary_task"] in ("geospatial", "general_knowledge"):
+        final_answer = outputs[0].get("answer", "")
+        syn_source = "deterministic_gis" if plan["primary_task"] == "geospatial" else "direct_llm"
+        fb_used = outputs[0].get("metadata", {}).get("fallback_used", False)
+        fb_reason = outputs[0].get("metadata", {}).get("fallback_reason")
+        claims_list = []
+        uncertainties_list = []
+        syn_justification = "Direct factual answer without specialist image synthesis."
+    else:
+        try:
+            from ai.synthesis.llm import LLMSynthesizer
+            synthesizer = LLMSynthesizer()
+            syn_model_name = getattr(getattr(synthesizer, "provider", None), "config", None) and synthesizer.provider.config.model or "OpenRouter LLM"
+            syn_res = synthesizer.synthesize(
+                query=query,
+                tool_results=outputs,
+                confidence=confidence,
+                confidence_status="uncalibrated",
+                intent={"task": plan["primary_task"], "workflow": plan["workflow"]},
+            )
+            final_answer = syn_res.answer
+            syn_source = syn_res.synthesis_source
+            fb_used = syn_res.fallback_used
+            fb_reason = syn_res.fallback_reason
+            claims_list = [c.model_dump() if hasattr(c, "model_dump") else {"text": c.text, "evidence_ids": c.evidence_ids} for c in syn_res.claims]
+            uncertainties_list = syn_res.uncertainties
+            syn_justification = syn_res.justification
+        except Exception as syn_err:
+            final_answer = "\n\n".join(o.get("answer") for o in outputs if o.get("answer"))
+            syn_source = "raw_tools_fallback"
+            fb_used = True
+            fb_reason = str(syn_err)
+            claims_list = [{"text": final_answer, "evidence_ids": ["E1"]}]
+            uncertainties_list = ["Model confidence is uncalibrated."]
+            syn_justification = "Specialist tool findings."
 
     # ---------------- Build explicit, truthful Model Execution Trace ----------------
     model_execution_list = []
@@ -427,6 +525,35 @@ def execute(
         "fallback_reason": fb_reason,
     })
 
+    from backend.chat import clean_llm_response
+    final_answer = clean_llm_response(final_answer)
+
+    # Determine execution type and metadata
+    if plan["primary_task"] == "general_knowledge" or any(o.get("tool") == "DIRECT_LLM" for o in outputs):
+        exec_type = "DIRECT LLM"
+        primary_tool_name = "DIRECT_LLM"
+        primary_prov = "TokenRouter / Upstream LLM"
+        primary_model = syn_model_name or "TokenRouter LLM"
+        is_fallback = fb_used
+    elif plan["primary_task"] == "geospatial" or any(o.get("tool") == "Deterministic GIS" for o in outputs):
+        exec_type = "DETERMINISTIC GIS"
+        primary_tool_name = "Deterministic GIS"
+        primary_prov = "SatQuery GIS Engine"
+        primary_model = "Deterministic GIS Baseline"
+        is_fallback = False
+    elif any(o.get("metadata", {}).get("fallback_used") for o in outputs) or fb_used:
+        exec_type = "FALLBACK"
+        primary_tool_name = outputs[0].get("tool", "Specialist") if outputs else "Fallback Formatter"
+        primary_prov = outputs[0].get("metadata", {}).get("provider", "SatQuery Spectral Baseline") if outputs else "SatQuery Local Engine"
+        primary_model = outputs[0].get("metadata", {}).get("model", "Deterministic Baseline") if outputs else "Deterministic Fallback Formatter"
+        is_fallback = True
+    else:
+        exec_type = "REAL MODEL"
+        primary_tool_name = outputs[0].get("tool", "Specialist") if outputs else "Specialist Tool"
+        primary_prov = outputs[0].get("metadata", {}).get("provider", "Specialist Provider") if outputs else "SatQuery Engine"
+        primary_model = outputs[0].get("metadata", {}).get("model", "Specialist Model") if outputs else "Specialist Model"
+        is_fallback = False
+
     # Determine analysis type name
     type_map = {
         "vqa": "Visual Q&A (VQA)",
@@ -434,6 +561,8 @@ def execute(
         "ground": "Spatial Grounding",
         "change": "Bi-Temporal Change Detection",
         "fusion": "Optical + SAR Cross-Modal Fusion",
+        "geospatial": "Deterministic GIS Retrieval",
+        "general_knowledge": "Direct LLM Knowledge",
     }
     analysis_type = type_map.get(plan["primary_task"], "Geospatial Analysis")
 
@@ -516,8 +645,14 @@ def execute(
         "scenario": scenario["scenario"],
         "execution_details": execution_details,
         "model_metadata": {
+            "execution_type": exec_type,
+            "provider": primary_prov,
+            "model": primary_model,
+            "tool": primary_tool_name,
+            "fallback_used": is_fallback,
+            "fallback_status": "FALLBACK" if is_fallback else ("DETERMINISTIC GIS" if exec_type == "DETERMINISTIC GIS" else ("DIRECT LLM" if exec_type == "DIRECT LLM" else "REAL MODEL")),
             "models_used": [m.get("actual_model") for m in model_execution_list],
-            "primary_provider": synth_source_display,
+            "primary_provider": primary_prov,
             "active_tier": active_tier,
         },
         "conversation": session_data.get("conversation", []),
@@ -668,6 +803,9 @@ def execute_followup(
         uncertainties_list = syn_res.uncertainties
         syn_justification = syn_res.justification
 
+    from backend.chat import clean_llm_response
+    final_answer = clean_llm_response(final_answer)
+
     synth_source_display = "OpenRouter" if (not fb_used and syn_source not in ("raw_tools_fallback", "deterministic_fallback", "rule_based")) else "Synthetic / Deterministic"
     model_execution_list.append({
         "task": "Follow-Up Synthesis",
@@ -758,6 +896,12 @@ def execute_followup(
         "scenario": sess.get("image", {}).get("modality", "optical") if sess else "optical",
         "execution_details": execution_details,
         "model_metadata": {
+            "execution_type": "FALLBACK" if fb_used else "DIRECT LLM",
+            "provider": synth_source_display,
+            "model": syn_model_name or "TokenRouter LLM",
+            "tool": "Session Follow-Up Synthesis",
+            "fallback_used": fb_used,
+            "fallback_status": "FALLBACK" if fb_used else "ACTIVE",
             "models_used": [m.get("actual_model") for m in model_execution_list],
             "primary_provider": synth_source_display,
             "active_tier": "session_context" if not specialist_run else "specialist_grounding",

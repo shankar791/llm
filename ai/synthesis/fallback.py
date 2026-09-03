@@ -44,8 +44,32 @@ class DeterministicFallbackFormatter:
                 latency_ms=0.5,
             )
 
+        # Strict check for unsupported geospatial facts (e.g. soil classification, elevation, exact coordinates)
+        # where authoritative datasets are absent
+        q_lower = query.lower()
+        is_unsupported_geo = any(w in q_lower for w in ["soil", "soil type", "soil classification", "pedology", "elevation", "altitude", "coordinate", "coordinates", "bathymetry", "depth", "distance to"])
+        if is_unsupported_geo:
+            has_geo_data = False
+            for tr in (tool_results or []):
+                meta = tr.get("metadata", {})
+                if "soil_type" in meta or "elevation_m" in meta or "coordinates" in meta:
+                    has_geo_data = True
+                    break
+            if not has_geo_data:
+                answer = "Insufficient verified evidence to answer reliably."
+                return SynthesisResult(
+                    answer=answer,
+                    claims=[SynthesisClaim(text=answer, evidence_ids=[])],
+                    uncertainties=["No authoritative dataset available for queried property."],
+                    justification="Insufficient verified evidence to answer reliably.",
+                    synthesis_source="deterministic_gis",
+                    fallback_used=False,
+                    fallback_reason="Unsupported geospatial attribute without ground-truth dataset",
+                    latency_ms=0.5,
+                )
+
         if not tool_results and not existing_evidence:
-            answer = "No analysis output was generated. Please verify query and image inputs."
+            answer = "No analysis output was generated. Insufficient verified evidence to answer reliably."
             return SynthesisResult(
                 answer=answer,
                 claims=[SynthesisClaim(text=answer, evidence_ids=[])],
@@ -81,16 +105,16 @@ class DeterministicFallbackFormatter:
 
             # Strict anti-hallucination: explicitly state if evidence is absent for the queried feature
             if is_bldg_query and not matched_items:
-                answer = "The available analysis does not contain enough evidence or detections of buildings or structural features in this scene."
-                justification = "No structural or building evidence items found in existing session context."
+                answer = "Insufficient verified evidence to answer reliably."
+                justification = "Insufficient verified evidence to answer reliably."
                 ev_ids = []
             elif is_veg_query and not matched_items:
-                answer = "The available analysis does not contain enough evidence or detections of vegetation features in this scene."
-                justification = "No vegetation evidence items found in existing session context."
+                answer = "Insufficient verified evidence to answer reliably."
+                justification = "Insufficient verified evidence to answer reliably."
                 ev_ids = []
             elif is_water_query and not matched_items:
-                answer = "The available analysis does not contain enough evidence or detections of water bodies or flood features in this scene."
-                justification = "No water evidence items found in existing session context."
+                answer = "Insufficient verified evidence to answer reliably."
+                justification = "Insufficient verified evidence to answer reliably."
                 ev_ids = []
             else:
                 if not matched_items:
@@ -183,33 +207,29 @@ class DeterministicFallbackFormatter:
             pct_val = f"{change_pct:.1f}%" if change_pct is not None else ""
             pct_clause = f", representing approximately {pct_val} of the total footprint" if pct_val else ""
 
+            uncalib_suffix = " Sensor confidence is uncalibrated." if confidence_status == "uncalibrated" else ""
             if area_str:
-                p2 = f"Quantitatively, the change mask encompasses approximately {area_str} distributed across {reg_str}{pct_clause}. The geometric vectorization and spatial overlay highlight localized transformation."
+                p2 = f"Quantitatively, the change mask encompasses approximately {area_str} distributed across {reg_str}{pct_clause}. The geometric vectorization and spatial overlay highlight localized transformation.{uncalib_suffix}"
             elif tool_ans:
-                p2 = f"{tool_ans}"
+                p2 = f"{tool_ans}{uncalib_suffix}"
             else:
-                p2 = "The detected variance is concentrated in specific clusters highlighted in the change overlay."
+                p2 = f"The detected variance is concentrated in specific clusters highlighted in the change overlay.{uncalib_suffix}"
 
-            # Interpretation & confidence paragraph
-            p3 = "These observations reflect empirical surface alterations between the two observation dates. Sensor confidence is uncalibrated."
-            
-            paragraphs = [p1, p2, p3]
+            paragraphs = [p1, p2]
             claims.append(SynthesisClaim(text=f"{p1} {p2}", evidence_ids=evidence_ids))
 
         elif task in {"fusion", "T5_OpticalSAR"} or "optical_sar" in str(primary_tool.get("tool_id", "")).lower() or "optical–sar" in str(primary_tool.get("answer", "")).lower():
             tool_ans = primary_tool.get("answer", "").strip()
-            p1 = "Joint Optical and SAR multimodal analysis provides robust land-cover and surface texture classification."
+            p1 = "Joint Optical and SAR multimodal analysis provides complementary spectral and surface texture observations."
             p2 = tool_ans if tool_ans else "Cross-modal fusion combines optical spectral reflectance with SAR radar backscatter to isolate standing water, structural footprints, and vegetated terrain."
-            p3 = "SAR backscatter statistics effectively mitigate cloud and shadow ambiguities in the optical channel."
-            paragraphs = [p1, p2, p3]
+            paragraphs = [p1, p2]
             claims.append(SynthesisClaim(text=f"{p1} {p2}", evidence_ids=evidence_ids))
 
         elif "ndvi" in q_lower or "vegetation" in q_lower or "spectral" in q_lower:
             tool_ans = primary_tool.get("answer", "").strip()
-            p1 = "Spectral analysis of the optical bands provides detailed characterization of vegetation vitality and surface cover."
+            p1 = "Spectral analysis of the optical bands characterizes vegetation vitality and surface cover across the scene."
             p2 = tool_ans if tool_ans else "Reflectance profiling differentiates dense healthy canopy, open pastures, and non-vegetated terrain across the scene."
-            p3 = "These spectral signatures reflect empirical band ratios derived from the calibrated imagery."
-            paragraphs = [p1, p2, p3]
+            paragraphs = [p1, p2]
             claims.append(SynthesisClaim(text=f"{p1} {p2}", evidence_ids=evidence_ids))
 
         else:
